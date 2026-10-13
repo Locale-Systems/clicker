@@ -21,6 +21,7 @@ from enum import StrEnum
 from typing import Any
 
 from . import rf_analysis as ra
+from .const import MIN_SIGNAL_PULSES
 from .encoder import ENCODER_VERSION, CodeSpec, encode, roundtrip
 
 SCHEMA_VERSION = 1
@@ -169,8 +170,10 @@ def frame_from_capture(timings: list[int]) -> Frame:
     if report.status == "encoded" and report.spec is not None:
         return EncodedFrame(spec=CodeSpec.from_dict(report.spec))
     trimmed = ra.trim_partial_frames(ra.normalize(timings))
-    if not trimmed:
-        raise ModelError("capture holds no usable timings")
+    if len(trimmed) < MIN_SIGNAL_PULSES:
+        raise ModelError(
+            f"capture holds {len(trimmed)} usable timings; a code needs {MIN_SIGNAL_PULSES}"
+        )
     return RawFrame(timings=tuple(trimmed), reason=report.reason)
 
 

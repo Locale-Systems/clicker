@@ -18,6 +18,7 @@ jobs:
       - run: python -I tests/test_stream.py
       - run: python -I tests/test_receive.py
       - run: python -I tests/test_matcher.py
+      - run: python -I tests/test_importer.py
       - run: python -I tools/report.py
       - run: pip install mypy ruff
       - run: ruff check .
