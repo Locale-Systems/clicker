@@ -37,15 +37,22 @@ def wesp32() -> FoundRadio:
     )
 
 
+class FoundRadios(list[FoundRadio]):
+    """What discovery finds, and how often Clicker looked."""
+
+    discoveries = 0
+
+    async def discover(self, hass: object) -> list[FoundRadio]:
+        self.discoveries += 1
+        return list(self)
+
+
 @pytest.fixture
-def found_radios() -> Generator[list[FoundRadio]]:
+def found_radios() -> Generator[FoundRadios]:
     """What discovery finds; tests change the list to change the hardware."""
-    found = [wesp32()]
+    found = FoundRadios([wesp32()])
     with (
-        patch(
-            "custom_components.clicker.runtime.async_find_radios",
-            AsyncMock(side_effect=lambda hass: list(found)),
-        ),
+        patch("custom_components.clicker.runtime.async_find_radios", found.discover),
         patch(
             "custom_components.clicker.diagnostics.async_find_radios",
             AsyncMock(side_effect=lambda hass: list(found)),

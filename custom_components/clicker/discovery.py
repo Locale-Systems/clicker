@@ -98,6 +98,7 @@ async def async_find_radios(hass: HomeAssistant) -> list[FoundRadio]:
                     transmitter_registry_id=registry_id,
                     receiver=receiver_reference(device_info.mac_address, rx) if rx else None,
                     available=bool(entry_data.available),
+                    receiver_handle=(entry.entry_id, rx.device_id, rx.key) if rx else None,
                 )
             )
     return found

@@ -56,7 +56,7 @@ async def async_import_rf_device_manager(
     runtime = entry.runtime_data
     async with runtime.lock:
         notes = result.notes + merge_import(runtime.data, result.data)
-        await runtime.store.async_save(runtime.data)
+        await runtime.async_save()
     await runtime.async_refresh_radios(hass)
     for note in notes:
         _LOGGER.info("Import: %s", note)

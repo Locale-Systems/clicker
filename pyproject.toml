@@ -29,5 +29,6 @@ exclude = ["custom_components/clicker/core/(decoders|rf_analysis)\\.py$"]
 [tool.pytest.ini_options]
 # The plain-script suites in tests/ run with `python3 -I tests/X.py`.
 testpaths = ["tests/ha"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

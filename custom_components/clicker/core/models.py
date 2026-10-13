@@ -402,6 +402,10 @@ class ClickerData:
         """Return the radio with this id, if any."""
         return next((r for r in self.radios if r.id == radio_id), None)
 
+    def device(self, device_id: str) -> Device | None:
+        """Return the device with this id, if any."""
+        return next((d for d in self.devices if d.id == device_id), None)
+
     def problems(self) -> list[str]:
         """Return everything inconsistent, across devices and radios."""
         found: list[str] = []

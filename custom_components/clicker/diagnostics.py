@@ -35,4 +35,6 @@ async def async_get_config_entry_diagnostics(
             for device in data.devices
         ],
         "problems": data.problems(),
+        "listening": runtime.hub.listening if runtime.hub else {},
+        "recent_receptions": [asdict(heard) for heard in runtime.hub.recent] if runtime.hub else [],
     }

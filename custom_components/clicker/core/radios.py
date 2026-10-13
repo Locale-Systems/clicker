@@ -37,6 +37,9 @@ class FoundRadio:
     transmitter_registry_id: str | None = None
     receiver: str | None = None  # "<mac>:<sub-device id>:<object id>"
     available: bool = True
+    # Where receptions arrive this session, opaque here: the integration uses
+    # (ESPHome config entry id, sub-device id, entity key).
+    receiver_handle: tuple[str, int, int] | None = None
 
     @property
     def transmitter(self) -> str | None:

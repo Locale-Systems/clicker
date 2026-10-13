@@ -13,6 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
 from .core.models import ModelError
+from .hub import ReceiveHub
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .services import async_setup_services
 from .storage import ClickerStore
@@ -48,6 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
             hass, runtime.async_refresh_radios(hass), "clicker radio refresh"
         )
 
+    runtime.hub = ReceiveHub(hass, runtime, _refresh)
+    entry.async_on_unload(runtime.hub.async_stop)
     _refresh()
     entry.async_on_unload(async_track_time_interval(hass, _refresh, RADIO_REFRESH_INTERVAL))
     if not hass.is_running:
