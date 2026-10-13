@@ -28,6 +28,7 @@ files = [
     "custom_components/clicker/core/receive.py",
     "custom_components/clicker/core/matcher.py",
     "custom_components/clicker/core/importer.py",
+    "custom_components/clicker/core/learn.py",
     "custom_components/clicker/core/const.py",
     "custom_components/clicker/core/__init__.py",
 ]
