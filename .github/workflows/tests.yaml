@@ -16,6 +16,7 @@ jobs:
       - run: python -I tests/test_encoder.py
       - run: python -I tests/test_models.py
       - run: python -I tests/test_stream.py
+      - run: python -I tests/test_receive.py
       - run: python -I tools/report.py
       - run: pip install mypy ruff
       - run: ruff check .

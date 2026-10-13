@@ -25,5 +25,6 @@ files = [
     "custom_components/clicker/core/models.py",
     "custom_components/clicker/core/encoder.py",
     "custom_components/clicker/core/stream.py",
+    "custom_components/clicker/core/receive.py",
 ]
 mypy_path = "custom_components/clicker"

@@ -120,11 +120,21 @@ def _strip_leading_space(frame: list[int]) -> list[int]:
     return frame[1:] if frame and frame[0] < 0 else frame
 
 
-def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
-    """Return one complete frame (mark first, gap last) and how it was found."""
+@dataclass(frozen=True)
+class UnitSearch:
+    """Result of looking for one complete repeating frame in a capture."""
+
+    unit: list[int] | None  # mark first, gap last; None when none was found
+    source: str  # how the unit was found, or why not
+    complete_frames: int = 0  # frames that end on their gap
+    agreeing_frames: int = 0  # complete frames carrying the winning bits
+
+
+def find_unit(timings: list[int]) -> UnitSearch:
+    """Find one complete frame (mark first, gap last) and how it was found."""
     stream = _strip_leading_space(ra.trim_partial_frames(ra.normalize(timings)))
     if not stream:
-        return None, "empty capture"
+        return UnitSearch(None, "empty capture")
     threshold = gap_threshold(stream)
     frames = [_strip_leading_space(frame) for frame in ra.split_frames(stream)]
     complete = [
@@ -141,10 +151,15 @@ def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
         if votes:
             winner, count = votes.most_common(1)[0]
             voters = [f for f, bits in zip(complete, decoded, strict=True) if bits == winner]
-            return ra.dominant_frame(voters), (
-                f"{len(complete)} complete frame(s), {count} agree on the bits"
+            return UnitSearch(
+                ra.dominant_frame(voters),
+                f"{len(complete)} complete frame(s), {count} agree on the bits",
+                len(complete),
+                count,
             )
-        return ra.dominant_frame(complete), f"{len(complete)} complete frame(s)"
+        return UnitSearch(
+            ra.dominant_frame(complete), f"{len(complete)} complete frame(s)", len(complete)
+        )
     # One receiver event of a single frame: [sync mark, sync gap] + data
     # ending on a mark (the gap preceding the data closes the previous frame).
     # Rotating the leading gap to the end yields the repeating unit.
@@ -155,8 +170,16 @@ def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
         and len(frames[1]) >= 9
         and frames[1][-1] > 0
     ):
-        return [*frames[1], frames[0][1]], "rotated: leading sync gap moved to end"
-    return None, "no complete frame (no closing gap)"
+        unit = [*frames[1], frames[0][1]]
+        agreeing = 1 if decode_frame(unit).get("bits") else 0
+        return UnitSearch(unit, "rotated: leading sync gap moved to end", 1, agreeing)
+    return UnitSearch(None, "no complete frame (no closing gap)")
+
+
+def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
+    """Return one complete frame (mark first, gap last) and how it was found."""
+    search = find_unit(timings)
+    return search.unit, search.source
 
 
 # ---------------------------------------------------------------------------
