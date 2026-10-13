@@ -109,7 +109,7 @@ class Report:
 # ---------------------------------------------------------------------------
 
 
-def _gap_threshold(timings: list[int]) -> float:
+def gap_threshold(timings: list[int]) -> float:
     """Mirror rf_analysis.split_frames' adaptive inter-frame gap threshold."""
     absolutes = sorted(abs(value) for value in timings)
     p95 = absolutes[int(0.95 * (len(absolutes) - 1))]
@@ -125,7 +125,7 @@ def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
     stream = _strip_leading_space(ra.trim_partial_frames(ra.normalize(timings)))
     if not stream:
         return None, "empty capture"
-    threshold = _gap_threshold(stream)
+    threshold = gap_threshold(stream)
     frames = [_strip_leading_space(frame) for frame in ra.split_frames(stream)]
     complete = [
         frame

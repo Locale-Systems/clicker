@@ -21,5 +21,9 @@ select = ["E", "F", "I", "UP", "B"]
 strict = true
 python_version = "3.14"
 follow_imports = "silent"
-files = ["custom_components/clicker/core/models.py", "custom_components/clicker/core/encoder.py"]
+files = [
+    "custom_components/clicker/core/models.py",
+    "custom_components/clicker/core/encoder.py",
+    "custom_components/clicker/core/stream.py",
+]
 mypy_path = "custom_components/clicker"
