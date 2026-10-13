@@ -143,6 +143,26 @@ async def test_reconnect_resubscribes(
 
 
 @pytest.mark.usefixtures("patio_fan")
+async def test_esphome_reload_relistens(
+    hass: HomeAssistant, node: FakeNode, found_radios: FoundRadios
+) -> None:
+    """A reloaded ESPHome entry (new runtime data) is listened to straight away."""
+    entry = await setup_clicker(hass)
+    hub = entry.runtime_data.hub
+    assert hub is not None
+    esphome = hass.config_entries.async_get_entry(NODE_ENTRY)
+    assert esphome is not None
+
+    node.set_available(False)
+    reloaded = FakeNode()
+    esphome.runtime_data = reloaded
+    esphome.mock_state(hass, ConfigEntryState.LOADED)
+    await hass.async_block_till_done()
+    assert hub.listening == {NODE_ENTRY: True}
+    assert reloaded.client.subscribe_calls == 1 and not node.device_callbacks
+
+
+@pytest.mark.usefixtures("patio_fan")
 async def test_unload_stops_listening(hass: HomeAssistant, node: FakeNode) -> None:
     """Unloading Clicker removes every callback it left on the node."""
     entry = await setup_clicker(hass)

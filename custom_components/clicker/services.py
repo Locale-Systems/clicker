@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util.json import load_json
 
 from .const import DOMAIN
@@ -70,7 +71,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
         response = await async_import_rf_device_manager(hass, _loaded_entry(hass))
         return response if call.return_response else None
 
-    hass.services.async_register(
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_IMPORT_RF_DEVICE_MANAGER,
         _import,

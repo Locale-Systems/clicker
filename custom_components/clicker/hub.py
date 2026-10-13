@@ -5,7 +5,8 @@ connection; Home Assistant's ESPHome integration doesn't route RF receptions
 anywhere, so Clicker listens on each node's client directly. A subscription
 lives as long as the connection, so it is renewed whenever the node comes
 back, and the radios are re-discovered then too (entity keys can change
-with new firmware).
+with new firmware). A reloaded ESPHome entry gets new runtime data, so a
+newly loaded entry triggers a re-discovery as well.
 
 Each reception is analyzed (:func:`core.receive.analyze`) and matched
 (:class:`core.matcher.Matcher`). A match fires ``clicker_command_received``
@@ -22,11 +23,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import (
+    SIGNAL_CONFIG_ENTRY_CHANGED,
+    ConfigEntry,
+    ConfigEntryChange,
+    ConfigEntryState,
+)
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
-from .const import DOMAIN
+from .const import DOMAIN, ESPHOME_DOMAIN
 from .core.matcher import Match
 from .core.receive import analyze
 
@@ -54,6 +60,7 @@ class Heard:
     fingerprint: str | None
     how: str
     matches: tuple[str, ...]  # "Device / Command"
+    timings: tuple[int, ...]  # as received, for learning
 
 
 class _NodeListener:
@@ -123,6 +130,14 @@ class ReceiveHub:
         self._listeners: dict[str, _NodeListener] = {}
         self._routes: dict[tuple[str, int, int], str] = {}  # receiver handle -> radio id
         self.recent: deque[Heard] = deque(maxlen=RECENT_RECEPTIONS)
+        self._unsub_entries = async_dispatcher_connect(
+            hass, SIGNAL_CONFIG_ENTRY_CHANGED, self._on_entry_changed
+        )
+
+    @callback
+    def _on_entry_changed(self, change: ConfigEntryChange, entry: ConfigEntry) -> None:
+        if entry.domain == ESPHOME_DOMAIN and entry.state is ConfigEntryState.LOADED:
+            self.request_refresh()
 
     @property
     def listening(self) -> dict[str, bool]:
@@ -153,6 +168,7 @@ class ReceiveHub:
     @callback
     def async_stop(self) -> None:
         """Stop listening everywhere."""
+        self._unsub_entries()
         for listener in self._listeners.values():
             listener.async_stop()
         self._listeners.clear()
@@ -180,6 +196,7 @@ class ReceiveHub:
                 fingerprint=reception.fingerprint,
                 how=reception.how,
                 matches=tuple(names),
+                timings=tuple(timings),
             )
         )
         _LOGGER.debug(
