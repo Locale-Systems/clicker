@@ -38,7 +38,6 @@ SETTLE_GAP_S = 0.25
 class Sent:
     """What a send put on air."""
 
-    device: Device
     command: Command
     radio: Radio
     transmission: Transmission
@@ -70,23 +69,29 @@ class SendQueue:
             raise ServiceValidationError(f"Radio {radio.name} has no transmitter")
         return radio.transmitter
 
+    def radio_of(self, device: Device) -> Radio:
+        """Return the radio a device sends through."""
+        if (radio := self._runtime.data.radio(device.radio_id)) is None:
+            raise ServiceValidationError(f"{device.name} has no radio")
+        return radio
+
     async def async_send(
         self,
-        device: Device,
+        radio: Radio,
         command: Command,
         *,
         policy: SendPolicy | None = None,
         context: Context | None = None,
     ) -> Sent:
-        """Send a device's command, after any sends already queued on its radio."""
-        radio = self._runtime.data.radio(device.radio_id)
-        if radio is None:
-            raise ServiceValidationError(f"{device.name} has no radio")
+        """Send a command on a radio, after any sends already queued there.
+
+        The command needn't be stored: learn candidates are tested this way.
+        """
         transmitter = self._transmitter(radio)
         try:
             plan = plan_command(command, policy)
         except ValueError as err:
-            raise ServiceValidationError(f"{device.name} / {command.name}: {err}") from err
+            raise ServiceValidationError(f"{command.name}: {err}") from err
 
         queued_at = self._clock()
         async with self._locks.setdefault(radio.id, asyncio.Lock()):
@@ -105,14 +110,13 @@ class SendQueue:
                 ),
                 context=context,
             )
-        return Sent(device, command, radio, plan, waited_s=started - queued_at)
+        return Sent(command, radio, plan, waited_s=started - queued_at)
 
 
 def describe(sent: Sent) -> dict[str, JsonValueType]:
-    """Summarize a send for an action response."""
+    """Summarize a send for a response."""
     plan = sent.transmission
     return {
-        "device": sent.device.name,
         "command": sent.command.name,
         "radio": sent.radio.name,
         "encoded": isinstance(sent.command.frame, EncodedFrame),

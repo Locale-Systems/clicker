@@ -21,6 +21,7 @@ jobs:
       - run: python -I tests/test_importer.py
       - run: python -I tests/test_learn.py
       - run: python -I tests/test_radios.py
+      - run: python -I tests/test_edit.py
       - run: python -I tools/report.py
 
   homeassistant:

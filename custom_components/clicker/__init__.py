@@ -18,6 +18,7 @@ from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import SendQueue
 from .services import async_setup_services
 from .storage import ClickerStore
+from .websocket import async_setup_websocket
 
 __all__ = ["ClickerConfigEntry", "ClickerRuntime"]
 
@@ -30,6 +31,7 @@ RADIO_REFRESH_INTERVAL = timedelta(seconds=60)
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register Clicker's actions."""
     async_setup_services(hass)
+    async_setup_websocket(hass)
     return True
 
 
@@ -41,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
     except ModelError as err:
         # Leave the file alone: a newer Clicker wrote it.
         raise ConfigEntryError(f"Can't read Clicker's stored data: {err}") from err
-    runtime = ClickerRuntime(store=store, data=data)
+    runtime = ClickerRuntime(hass=hass, store=store, data=data)
     entry.runtime_data = runtime
 
     @callback

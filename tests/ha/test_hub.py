@@ -13,7 +13,7 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.clicker.const import DOMAIN
 from custom_components.clicker.core.radios import FoundRadio
-from custom_components.clicker.hub import EVENT_COMMAND_RECEIVED
+from custom_components.clicker.hub import EVENT_REMOTE_PRESSED
 
 from .conftest import NODE_ENTRY, RX_KEY, FakeNode, FoundRadios, corpus, rf_device_manager_store
 from .test_init import setup_clicker
@@ -22,7 +22,7 @@ from .test_init import setup_clicker
 @pytest.mark.usefixtures("patio_fan")
 async def test_press_fires_once(hass: HomeAssistant, node: FakeNode) -> None:
     """A press fires one event; its repeats within the release gap don't."""
-    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
     entry = await setup_clicker(hass)
     assert node.client.subscribe_calls == 1
 
@@ -41,7 +41,7 @@ async def test_press_fires_once(hass: HomeAssistant, node: FakeNode) -> None:
 @pytest.mark.usefixtures("patio_fan")
 async def test_other_receptions(hass: HomeAssistant, node: FakeNode) -> None:
     """Other endpoints are ignored; unknown codes are kept but fire nothing."""
-    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
     entry = await setup_clicker(hass)
     hub = entry.runtime_data.hub
     assert hub is not None
@@ -58,7 +58,7 @@ async def test_reconnect_resubscribes(
     hass: HomeAssistant, node: FakeNode, found_radios: FoundRadios
 ) -> None:
     """After a reconnect the hub listens again and re-discovers radios."""
-    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
     entry = await setup_clicker(hass)
     hub = entry.runtime_data.hub
     assert hub is not None and hub.listening == {NODE_ENTRY: True}
@@ -104,7 +104,7 @@ async def test_esphome_reload_relistens(
     reloaded.set_available(True)
     await hass.async_block_till_done()
     assert hub.listening == {NODE_ENTRY: True} and reloaded.client.subscribe_calls == 1
-    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
     reloaded.client.send(corpus.HELD_CAPTURE)
     await hass.async_block_till_done()
     assert [e.data["command"] for e in events] == ["Power"]
@@ -126,7 +126,7 @@ async def test_import_is_matched(
     (tmp_path / ".storage").mkdir()
     (tmp_path / ".storage" / "rf_device_manager").write_text(json.dumps(rf_device_manager_store()))
     hass.config.config_dir = str(tmp_path)
-    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
     await setup_clicker(hass)
     await hass.services.async_call(DOMAIN, "import_rf_device_manager", blocking=True)
 

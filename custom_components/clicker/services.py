@@ -102,8 +102,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
         if (frames := call.data.get(ATTR_FRAMES_ON_AIR)) is not None:
             policy = SendPolicy(frames_on_air=frames)
         assert runtime.sender is not None
-        sent = await runtime.sender.async_send(device, command, policy=policy, context=call.context)
-        return describe(sent) if call.return_response else None
+        sent = await runtime.sender.async_send(
+            runtime.sender.radio_of(device), command, policy=policy, context=call.context
+        )
+        return {"device": device.name, **describe(sent)} if call.return_response else None
 
     hass.services.async_register(
         DOMAIN,

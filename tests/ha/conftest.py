@@ -171,3 +171,10 @@ def patio_fan(hass_storage: dict[str, Any], found_radios: list[FoundRadio]) -> N
     data = import_rf_device_manager(json.loads(json.dumps(rf_device_manager_store())), now=0).data
     data.radios[0].transmitter = found_radios[0].transmitter
     hass_storage[DOMAIN] = {"version": 1, "key": DOMAIN, "data": data.to_dict()}
+
+
+@pytest.fixture
+def transmit() -> Generator[AsyncMock]:
+    """Home Assistant's radio_frequency send, as Clicker calls it."""
+    with patch("custom_components.clicker.sender.async_send_command") as send:
+        yield send

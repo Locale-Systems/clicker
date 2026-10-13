@@ -37,3 +37,8 @@ testpaths = ["tests/ha"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[[tool.mypy.overrides]]
+# Home Assistant re-exports helpers (websocket_api.async_response, ...) without __all__.
+module = ["homeassistant.*"]
+implicit_reexport = true

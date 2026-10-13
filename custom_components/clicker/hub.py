@@ -9,8 +9,8 @@ with new firmware). A reloaded ESPHome entry gets new runtime data, so a
 newly loaded entry triggers a re-discovery as well.
 
 Each reception is analyzed (:func:`core.receive.analyze`) and matched
-(:class:`core.matcher.Matcher`). A match fires ``clicker_command_received``
-on the event bus and :data:`SIGNAL_COMMAND_RECEIVED` for Clicker's entities.
+(:class:`core.matcher.Matcher`). A match fires ``clicker_remote_pressed``
+on the event bus and :data:`SIGNAL_REMOTE_PRESSED` for Clicker's entities.
 The last receptions, matched or not, are kept for diagnostics and learning.
 """
 
@@ -34,18 +34,21 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dis
 
 from .const import DOMAIN, ESPHOME_DOMAIN
 from .core.matcher import Match
-from .core.receive import analyze
+from .core.models import Radio
+from .core.receive import Reception, analyze
 
 if TYPE_CHECKING:
     from .runtime import ClickerRuntime
 
 _LOGGER = logging.getLogger(__name__)
 
-EVENT_COMMAND_RECEIVED = f"{DOMAIN}_command_received"
-SIGNAL_COMMAND_RECEIVED = f"{DOMAIN}_command_received"  # dispatcher: (Match, at)
+EVENT_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"
+SIGNAL_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"  # dispatcher: (Match, at)
 # A held button can fill the receiver's buffer; the first frames are enough.
 MAX_ANALYZED_TIMINGS = 2000
 RECENT_RECEPTIONS = 25
+
+type ReceptionListener = Callable[[Heard, Reception, Radio], None]
 
 
 @dataclass(frozen=True)
@@ -130,6 +133,7 @@ class ReceiveHub:
         self._listeners: dict[str, _NodeListener] = {}
         self._routes: dict[tuple[str, int, int], str] = {}  # receiver handle -> radio id
         self.recent: deque[Heard] = deque(maxlen=RECENT_RECEPTIONS)
+        self._reception_listeners: list[ReceptionListener] = []
         self._unsub_entries = async_dispatcher_connect(
             hass, SIGNAL_CONFIG_ENTRY_CHANGED, self._on_entry_changed
         )
@@ -138,6 +142,12 @@ class ReceiveHub:
     def _on_entry_changed(self, change: ConfigEntryChange, entry: ConfigEntry) -> None:
         if entry.domain == ESPHOME_DOMAIN and entry.state is ConfigEntryState.LOADED:
             self.request_refresh()
+
+    @callback
+    def async_add_listener(self, listener: ReceptionListener) -> CALLBACK_TYPE:
+        """Call ``listener`` with every reception (learn sessions, the live view)."""
+        self._reception_listeners.append(listener)
+        return lambda: self._reception_listeners.remove(listener)
 
     @property
     def listening(self) -> dict[str, bool]:
@@ -187,19 +197,20 @@ class ReceiveHub:
         for match in self._runtime.matcher.match(reception, radio.frequency_hz, at):
             if (name := self._fire(match, radio.id, at)) is not None:
                 names.append(name)
-        self.recent.append(
-            Heard(
-                at=time.time(),
-                radio_id=radio.id,
-                pulses=len(timings),
-                bits=reception.bits,
-                encoding=reception.encoding,
-                fingerprint=reception.fingerprint,
-                how=reception.how,
-                matches=tuple(names),
-                timings=tuple(timings),
-            )
+        heard = Heard(
+            at=time.time(),
+            radio_id=radio.id,
+            pulses=len(timings),
+            bits=reception.bits,
+            encoding=reception.encoding,
+            fingerprint=reception.fingerprint,
+            how=reception.how,
+            matches=tuple(names),
+            timings=tuple(timings),
         )
+        self.recent.append(heard)
+        for listener in list(self._reception_listeners):
+            listener(heard, reception, radio)
         _LOGGER.debug(
             "%s heard %s (%d pulses): %s",
             radio.name,
@@ -214,7 +225,7 @@ class ReceiveHub:
         if device is None or command is None:
             return None
         self._hass.bus.async_fire(
-            EVENT_COMMAND_RECEIVED,
+            EVENT_REMOTE_PRESSED,
             {
                 "device_id": device.id,
                 "device": device.name,
@@ -225,5 +236,5 @@ class ReceiveHub:
                 "distance": match.distance,
             },
         )
-        async_dispatcher_send(self._hass, SIGNAL_COMMAND_RECEIVED, match, at)
+        async_dispatcher_send(self._hass, SIGNAL_REMOTE_PRESSED, match, at)
         return f"{device.name} / {command.name}"
