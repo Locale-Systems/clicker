@@ -2,50 +2,44 @@
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass, field
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.typing import ConfigType
 
-from .core.models import ClickerData
-from .core.radios import FoundRadio, reconcile
-from .discovery import async_find_radios
+from .const import DOMAIN
+from .core.models import ModelError
+from .runtime import ClickerConfigEntry, ClickerRuntime
+from .services import async_setup_services
+from .storage import ClickerStore
 
-_LOGGER = logging.getLogger(__name__)
+__all__ = ["ClickerConfigEntry", "ClickerRuntime"]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 # ESPHome nodes connect and reconnect on their own schedule; look again regularly.
 RADIO_REFRESH_INTERVAL = timedelta(seconds=60)
 
 
-@dataclass
-class ClickerRuntime:
-    """What a loaded Clicker entry holds while Home Assistant runs."""
-
-    data: ClickerData = field(default_factory=ClickerData)
-    links: dict[str, FoundRadio] = field(default_factory=dict)  # radio id -> hardware
-    reported: set[str] = field(default_factory=set)  # notes already logged
-
-    async def async_refresh_radios(self, hass: HomeAssistant) -> None:
-        """Re-discover radios and reconcile them with the stored ones."""
-        result = reconcile(self.data.radios, await async_find_radios(hass))
-        self.data.radios = result.radios
-        self.links = result.links
-        for note in result.notes:
-            if note not in self.reported:
-                self.reported.add(note)
-                _LOGGER.info("Radio %s", note)
-
-
-type ClickerConfigEntry = ConfigEntry[ClickerRuntime]
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register Clicker's actions."""
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> bool:
     """Set up Clicker from its config entry."""
-    runtime = ClickerRuntime()
+    store = ClickerStore(hass)
+    try:
+        data = await store.async_load()
+    except ModelError as err:
+        # Leave the file alone: a newer Clicker wrote it.
+        raise ConfigEntryError(f"Can't read Clicker's stored data: {err}") from err
+    runtime = ClickerRuntime(store=store, data=data)
     entry.runtime_data = runtime
 
     @callback
@@ -69,3 +63,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> bool:
     """Unload Clicker; listeners registered with async_on_unload are removed."""
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> None:
+    """Delete Clicker's stored data when the integration is removed."""
+    await ClickerStore(hass).async_remove()

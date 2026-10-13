@@ -19,8 +19,16 @@ sys.path[:0] = [str(ROOT / "custom_components" / "clicker"), str(ROOT / "tests")
 
 import corpus  # noqa: E402
 from core import rf_analysis as ra  # noqa: E402
-from core.importer import import_rf_device_manager  # noqa: E402
-from core.models import ClickerData, CommandKind, EncodedFrame, ModelError, RawFrame  # noqa: E402
+from core.importer import import_rf_device_manager, merge_import  # noqa: E402
+from core.models import (  # noqa: E402
+    ClickerData,
+    CommandKind,
+    Device,
+    EncodedFrame,
+    ModelError,
+    Radio,
+    RawFrame,
+)
 
 F433 = 433_920_000
 failures: list[str] = []
@@ -143,6 +151,54 @@ try:
     check(False, "a file without devices was accepted")
 except ModelError:
     pass
+
+# --- Merging an import into stored data -------------------------------------
+
+
+def fresh_import() -> ClickerData:
+    """The synthetic file, imported anew (merging mutates what it adds)."""
+    return import_rf_device_manager(json.loads(json.dumps(STORE)), now=0.0).data
+
+
+# Into nothing: everything is added as is.
+target = ClickerData()
+merge_notes = merge_import(target, fresh_import())
+check(len(target.radios) == 1 and len(target.devices) == 2, "empty merge: not all added")
+check("Living room: imported with" in "\n".join(merge_notes), "empty merge: no device note")
+
+# Twice: the second import changes nothing.
+before = target.to_dict()
+again_notes = merge_import(target, fresh_import())
+check(target.to_dict() == before, "second import changed the data")
+check(sum("skipped, a device with that name exists" in n for n in again_notes) == 2, "skip notes")
+
+# Into a discovered radio with another transmitter id: joined by frequency.
+discovered = Radio(name="wESP32 433.92 MHz", frequency_hz=F433, transmitter="reg-tx")
+target = ClickerData(radios=[discovered])
+merge_import(target, fresh_import())
+check(target.radios == [discovered], "frequency join: radio duplicated")
+check({d.radio_id for d in target.devices} == {discovered.id}, "frequency join: devices not moved")
+check(target.problems() == [], f"frequency join: problems {target.problems()}")
+
+# Same transmitter wins over frequency when two stored radios share the band.
+other = Radio(name="Attic", frequency_hz=F433, transmitter="radio_frequency.attic")
+hall = Radio(name="Hall", frequency_hz=F433, transmitter="radio_frequency.hall_rf")
+target = ClickerData(radios=[other, hall])
+merge_import(target, fresh_import())
+check({d.radio_id for d in target.devices} == {hall.id}, "transmitter join: wrong radio")
+
+# Two stored radios on the band and no transmitter match: added, not guessed.
+target = ClickerData(radios=[other, Radio(name="Shed", frequency_hz=F433)])
+merge_import(target, fresh_import())
+check(len(target.radios) == 3, "ambiguous merge: imported radio not added")
+
+# A radio whose devices were all skipped is not left behind.
+target = ClickerData(radios=[other, Radio(name="Shed", frequency_hz=F433)])
+target.devices = [
+    Device(name=n, radio_id=other.id, frequency_hz=F433) for n in ("living room", "GARAGE")
+]
+merge_import(target, fresh_import())
+check(len(target.radios) == 2, "skipped devices: their radio was kept")
 
 if failures:
     print("FAILURES:")

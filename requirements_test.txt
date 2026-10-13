@@ -1,0 +1,7 @@
+# Home Assistant test environment: uv pip install -r requirements_test.txt
+pytest-homeassistant-custom-component==0.13.372
+# Requirements of radio_frequency and esphome, which Clicker imports
+rf-protocols==4.3.0
+aioesphomeapi==46.6.0
+mypy
+ruff

@@ -17,8 +17,9 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 | Path | What |
 | --- | --- |
 | `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`), the matcher (`matcher.py`), learn-candidate grouping (`learn.py`) and the rf_device_manager importer (`importer.py`) |
-| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`) and diagnostics |
+| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the `clicker.import_rf_device_manager` action (`services.py`) and diagnostics |
 | `tests/` | One suite per core module, plus the capture corpus |
+| `tests/ha/` | Home Assistant tests (pytest-homeassistant-custom-component) |
 | `tools/import_rfdm.py` | Previews importing rf_device_manager's storage file, and can write the result as Clicker data |
 | `tools/report.py` | Reports which captures can be sent as encoded frames, and prints ready-to-run `send_raw` actions for testing on air |
 
@@ -39,7 +40,21 @@ python3 -I tools/report.py --storage FILE       # every code in rf_device_manage
 python3 -I tools/report.py --storage FILE --emit radio_frequency.TRANSMITTER
 ```
 
-Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library; Every module except the two derived from rf_device_manager is checked with `mypy --strict`.
+The Home Assistant tests, lint and type checks run in their own environment:
+
+```bash
+uv venv --python 3.14 .venv-ha
+uv pip install --python .venv-ha -r requirements_test.txt
+.venv-ha/bin/pytest
+.venv-ha/bin/ruff check . && .venv-ha/bin/ruff format --check .
+.venv-ha/bin/mypy
+```
+
+Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library. Every module except the two derived from rf_device_manager is checked with `mypy --strict`.
+
+### Importing from rf_device_manager
+
+Run the **Clicker: Import from RF Device Manager** action (`clicker.import_rf_device_manager`). It reads `.storage/rf_device_manager`, re-encodes each code and joins each device to the matching Clicker radio: the same transmitter entity, or else the only radio on that frequency. Devices whose names Clicker already has are skipped, so running it again is safe. With a response, it returns one note per decision and any problems left.
 
 ## Credits
 

@@ -161,3 +161,43 @@ def import_rf_device_manager(store: dict[str, Any], *, now: float) -> ImportResu
 
     result.data = ClickerData(radios=list(radios.values()), devices=list(devices.values()))
     return result
+
+
+def merge_import(target: ClickerData, imported: ClickerData) -> list[str]:
+    """Add imported devices to ``target`` and return one note per decision.
+
+    An imported radio joins a stored one with the same transmitter reference,
+    or else the only stored radio on its frequency; otherwise it is added and
+    radio reconciliation links it later. A device whose name is already taken
+    is skipped, so importing the same file twice changes nothing.
+    """
+    notes: list[str] = []
+    radio_ids: dict[str, str] = {}
+    for radio in imported.radios:
+        same = [
+            r for r in target.radios if radio.transmitter and r.transmitter == radio.transmitter
+        ]
+        if not same:
+            same = [r for r in target.radios if r.frequency_hz == radio.frequency_hz]
+        if len(same) == 1:
+            radio_ids[radio.id] = same[0].id
+            notes.append(f"{radio.name}: uses radio {same[0].name}")
+        else:
+            target.radios.append(radio)
+            radio_ids[radio.id] = radio.id
+            notes.append(f"{radio.name}: added as a new radio")
+
+    taken = {device.name.casefold() for device in target.devices}
+    for device in imported.devices:
+        if device.name.casefold() in taken:
+            notes.append(f"{device.name}: skipped, a device with that name exists")
+            continue
+        device.radio_id = radio_ids.get(device.radio_id, device.radio_id)
+        target.devices.append(device)
+        taken.add(device.name.casefold())
+        notes.append(f"{device.name}: imported with {len(device.commands)} commands")
+    used = {device.radio_id for device in target.devices}
+    unused = [r for r in imported.radios if r in target.radios and r.id not in used]
+    for radio in unused:  # every device on it was skipped
+        target.radios.remove(radio)
+    return notes
