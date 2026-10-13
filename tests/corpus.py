@@ -17,6 +17,7 @@ def parse(text: str) -> list[int]:
     """Parse comma separated timings as logged by ESPHome remote_receiver."""
     return [int(v.strip()) for v in text.replace("\n", " ").split(",") if v.strip()]
 
+
 EV1527_A = parse("""
 324, -2791, 321, -240, 323, -1333, 328, -1327, 316, -252, 330, -249, 320,
 -1335, 317, -1323, 327, -252, 321, -252, 322, -1334, 319, -1325, 319, -262,
@@ -132,7 +133,11 @@ def builtin_cases() -> list[tuple[str, list[int]]]:
         ("synthetic: tri-state P1 x3", ra.encode_tristate("0FF0F0FF0001", protocol=1) * 3),
         (
             "synthetic: Manchester x3 (8% jitter)",
-            [v for seed in (1, 2, 3) for v in build_manchester("101100111000101101001101", 500, 0.08, seed)],
+            [
+                v
+                for seed in (1, 2, 3)
+                for v in build_manchester("101100111000101101001101", 500, 0.08, seed)
+            ],
         ),
     ] + stress_cases()
 

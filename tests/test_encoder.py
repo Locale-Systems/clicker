@@ -63,7 +63,8 @@ for name in ("real: EV1527 event A", "real: EV1527 event B", "real: EV1527 event
     check(len(report.bits or "") == 64, f"{name}: expected 64 bits")
     check(len(report.integration_bits or "") == 63, f"{name}: upstream no longer 63 bits")
 check(
-    reports["real: EV1527 event A"].bits == reports["real: EV1527 event B"].bits
+    reports["real: EV1527 event A"].bits
+    == reports["real: EV1527 event B"].bits
     == reports["real: EV1527 event C"].bits,
     "EV1527: repeats decode to different codes",
 )

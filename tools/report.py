@@ -44,19 +44,25 @@ def capture_cases(paths: list[pathlib.Path]) -> list[tuple[str, list[int]]]:
     return [(p.name, ra.parse_timings_text(p.read_text())) for p in paths]
 
 
+def _cell(value: object) -> str:
+    return "-" if value is None else str(value)
+
+
 def print_table(reports: list[Report]) -> None:
     width = max(len(r.name) for r in reports)
-    print(f"{'capture':<{width}}  {'result':<7}  {'encoding':<14}  bits  frame  pulse%  gap%  stream  fp  detail")
+    header = "result   encoding        bits  frame  pulse%  gap%  stream  fp  detail"
+    print(f"{'capture':<{width}}  {header}")
     for r in reports:
         bits = len(r.bits) if r.bits else "-"
         note = r.reason or r.unit_source
         if r.integration_bits and r.bits and r.integration_bits != r.bits:
             note += f"; integration decodes {len(r.integration_bits)} bits"
+        fp = {True: "=", False: "≠", None: "-"}[r.fingerprint_same]
+        frame = "ok" if r.frame_match else "-"
         print(
             f"{r.name:<{width}}  {r.status:<7}  {r.encoding or '-':<14}  {bits!s:>4}  "
-            f"{'ok' if r.frame_match else '-':>5}  {r.max_pulse_dev_pct if r.max_pulse_dev_pct is not None else '-':>6}  "
-            f"{r.gap_dev_pct if r.gap_dev_pct is not None else '-':>4}  {r.stream_frames_ok:>3}/8  "
-            f"{'=' if r.fingerprint_same else ('≠' if r.fingerprint_same is False else '-'):>2}  {note}"
+            f"{frame:>5}  {_cell(r.max_pulse_dev_pct):>6}  {_cell(r.gap_dev_pct):>4}  "
+            f"{r.stream_frames_ok:>3}/8  {fp:>2}  {note}"
         )
     encoded = sum(r.status == "encoded" for r in reports)
     print(f"\n{encoded}/{len(reports)} captures can be sent as encoded frames")

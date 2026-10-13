@@ -35,8 +35,20 @@ from .decoders import FrameContext, decode_frame
 PAIR_ENCODINGS = {"space_distance", "mark_width", "pwm"}
 STREAM_FRAMES = 8
 
+# Bump whenever canonical_unit / extract_spec / encode change their output, so
+# stored codes made by an older encoder can be re-encoded from their captures.
+ENCODER_VERSION = 1
 
-@dataclass
+
+def _pair(value: Any) -> tuple[int, int] | None:
+    """Return a stored ``[mark, space]`` pair as a tuple (JSON has no tuples)."""
+    if value is None:
+        return None
+    mark, space = value
+    return int(mark), int(space)
+
+
+@dataclass(frozen=True)
 class CodeSpec:
     """Everything needed to synthesize one frame of a code."""
 
@@ -48,6 +60,28 @@ class CodeSpec:
     half: int = 0  # Manchester half period
     lead_half: bool = False  # Manchester: extra leading mark half
     gap: int = 0  # Manchester inter-frame gap
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to JSON-safe values."""
+        data = asdict(self)
+        for key in ("zero", "one", "sync"):
+            if data[key] is not None:
+                data[key] = list(data[key])
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CodeSpec:
+        """Load from ``to_dict`` output; unknown keys are ignored."""
+        return cls(
+            encoding=str(data["encoding"]),
+            bits=str(data["bits"]),
+            zero=_pair(data.get("zero")),
+            one=_pair(data.get("one")),
+            sync=_pair(data.get("sync")) or (0, 0),
+            half=int(data.get("half", 0)),
+            lead_half=bool(data.get("lead_half", False)),
+            gap=int(data.get("gap", 0)),
+        )
 
 
 @dataclass
@@ -106,7 +140,7 @@ def canonical_unit(timings: list[int]) -> tuple[list[int] | None, str]:
         votes = Counter(bits for bits in decoded if bits)
         if votes:
             winner, count = votes.most_common(1)[0]
-            voters = [f for f, bits in zip(complete, decoded) if bits == winner]
+            voters = [f for f, bits in zip(complete, decoded, strict=True) if bits == winner]
             return ra.dominant_frame(voters), (
                 f"{len(complete)} complete frame(s), {count} agree on the bits"
             )
@@ -153,17 +187,19 @@ def extract_spec(unit: list[int]) -> tuple[CodeSpec | None, str]:
             CodeSpec(
                 encoding=encoding,
                 bits=bits,
-                zero=_median_pair([p for p, b in zip(context.bit_pairs, bits) if b == "0"]),
-                one=_median_pair([p for p, b in zip(context.bit_pairs, bits) if b == "1"]),
+                zero=_median_pair(
+                    [p for p, b in zip(context.bit_pairs, bits, strict=True) if b == "0"]
+                ),
+                one=_median_pair(
+                    [p for p, b in zip(context.bit_pairs, bits, strict=True) if b == "1"]
+                ),
                 sync=context.sync_pair,
             ),
             "",
         )
 
     if encoding == "manchester":
-        base = CodeSpec(
-            encoding=encoding, bits=bits, half=decoded["pulse_length"], gap=-unit[-1]
-        )
+        base = CodeSpec(encoding=encoding, bits=bits, half=decoded["pulse_length"], gap=-unit[-1])
         for lead_half in (False, True):
             spec = CodeSpec(**{**asdict(base), "lead_half": lead_half})
             if ra.frames_similar(encode(spec), unit):
@@ -219,7 +255,7 @@ def encode(spec: CodeSpec) -> list[int]:
 def _deviation_pct(encoded: list[int], unit: list[int]) -> tuple[float, float]:
     """Max per-pulse deviation (excluding the gap) and the gap deviation, in %."""
     pulse = max(
-        abs(abs(a) - abs(b)) / abs(b) * 100 for a, b in zip(encoded[:-1], unit[:-1])
+        abs(abs(a) - abs(b)) / abs(b) * 100 for a, b in zip(encoded[:-1], unit[:-1], strict=True)
     )
     gap = abs(abs(encoded[-1]) - abs(unit[-1])) / abs(unit[-1]) * 100
     return round(pulse, 1), round(gap, 1)

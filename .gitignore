@@ -7,3 +7,5 @@ dist/
 # Local Home Assistant storage files used with tools/report.py
 *.storage.json
 rf_device_manager
+.mypy_cache/
+.ruff_cache/
