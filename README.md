@@ -2,7 +2,7 @@
 
 A Home Assistant integration for learning, controlling and tracking sub-GHz RF remotes (ceiling fans, lights, shades) through ESPHome radios.
 
-**Status:** phase 1 of 5, the core library. There's no installable integration yet.
+**Status:** phase 2 of 5, the integration backend. The core library is done; the integration installs and discovers ESPHome radios, but can't learn or send yet.
 
 ## What's different
 
@@ -17,6 +17,7 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 | Path | What |
 | --- | --- |
 | `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`), the matcher (`matcher.py`), learn-candidate grouping (`learn.py`) and the rf_device_manager importer (`importer.py`) |
+| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`) and diagnostics |
 | `tests/` | One suite per core module, plus the capture corpus |
 | `tools/import_rfdm.py` | Previews importing rf_device_manager's storage file, and can write the result as Clicker data |
 | `tools/report.py` | Reports which captures can be sent as encoded frames, and prints ready-to-run `send_raw` actions for testing on air |
@@ -32,6 +33,7 @@ python3 -I tests/test_receive.py
 python3 -I tests/test_matcher.py
 python3 -I tests/test_importer.py
 python3 -I tests/test_learn.py
+python3 -I tests/test_radios.py
 python3 -I tools/report.py                      # built-in corpus
 python3 -I tools/report.py --storage FILE       # every code in rf_device_manager's .storage/rf_device_manager
 python3 -I tools/report.py --storage FILE --emit radio_frequency.TRANSMITTER

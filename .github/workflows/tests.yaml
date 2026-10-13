@@ -20,7 +20,9 @@ jobs:
       - run: python -I tests/test_matcher.py
       - run: python -I tests/test_importer.py
       - run: python -I tests/test_learn.py
+      - run: python -I tests/test_radios.py
       - run: python -I tools/report.py
       - run: pip install mypy ruff
       - run: ruff check .
-      - run: mypy
+      # Home Assistant isn't installed here yet: type-check the core only.
+      - run: mypy custom_components/clicker/core

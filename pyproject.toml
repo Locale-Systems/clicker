@@ -21,15 +21,7 @@ select = ["E", "F", "I", "UP", "B"]
 strict = true
 python_version = "3.14"
 follow_imports = "silent"
-files = [
-    "custom_components/clicker/core/models.py",
-    "custom_components/clicker/core/encoder.py",
-    "custom_components/clicker/core/stream.py",
-    "custom_components/clicker/core/receive.py",
-    "custom_components/clicker/core/matcher.py",
-    "custom_components/clicker/core/importer.py",
-    "custom_components/clicker/core/learn.py",
-    "custom_components/clicker/core/const.py",
-    "custom_components/clicker/core/__init__.py",
-]
-mypy_path = "custom_components/clicker"
+explicit_package_bases = true
+files = ["custom_components/clicker"]
+# Derived from rf_device_manager; not typed to this standard.
+exclude = ["custom_components/clicker/core/(decoders|rf_analysis)\\.py$"]
