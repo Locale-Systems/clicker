@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -35,6 +36,7 @@ class ClickerRuntime:
     hub: ReceiveHub | None = None
     sender: SendQueue | None = None
     learn_sessions: dict[str, object] = field(default_factory=dict)  # see websocket.py
+    entities: dict[str, Any] = field(default_factory=dict)  # entity id -> ClickerEntity
     matcher: Matcher = field(init=False)
 
     def __post_init__(self) -> None:

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, Supp
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.service import async_register_admin_service
+from homeassistant.helpers.service import async_extract_entity_ids, async_register_admin_service
 from homeassistant.util.json import load_json
 
 from .const import DOMAIN
@@ -25,9 +25,19 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_IMPORT_RF_DEVICE_MANAGER = "import_rf_device_manager"
 SERVICE_SEND_COMMAND = "send_command"
+SERVICE_SET_ASSUMED_STATE = "set_assumed_state"
 ATTR_DEVICE = "device"
 ATTR_COMMAND = "command"
 ATTR_FRAMES_ON_AIR = "frames_on_air"
+
+SET_ASSUMED_STATE_SCHEMA = cv.make_entity_service_schema(
+    {
+        vol.Optional("is_on"): cv.boolean,
+        vol.Optional("percentage"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+        vol.Optional("oscillating"): cv.boolean,
+        vol.Optional("direction"): vol.In(["forward", "reverse"]),
+    }
+)
 
 SEND_COMMAND_SCHEMA = vol.Schema(
     {
@@ -106,6 +116,24 @@ def async_setup_services(hass: HomeAssistant) -> None:
             runtime.sender.radio_of(device), command, policy=policy, context=call.context
         )
         return {"device": device.name, **describe(sent)} if call.return_response else None
+
+    async def _set_assumed_state(call: ServiceCall) -> None:
+        # One action for every Clicker entity: each takes the fields it has.
+        runtime = _loaded_entry(hass).runtime_data
+        targets = [
+            runtime.entities[entity_id]
+            for entity_id in sorted(await async_extract_entity_ids(call))
+            if entity_id in runtime.entities
+        ]
+        if not targets:
+            raise ServiceValidationError("No Clicker entities were targeted")
+        fields = {k: v for k, v in call.data.items() if k not in cv.ENTITY_SERVICE_FIELDS}
+        for entity in targets:
+            await entity.async_set_assumed_state(**fields)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_ASSUMED_STATE, _set_assumed_state, schema=SET_ASSUMED_STATE_SCHEMA
+    )
 
     hass.services.async_register(
         DOMAIN,
