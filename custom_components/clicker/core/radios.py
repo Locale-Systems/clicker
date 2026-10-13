@@ -14,7 +14,8 @@ touching Home Assistant, so the rules are testable on their own:
 3. **New hardware.** Found radios nobody claimed become new stored radios.
 
 Matched radios are updated to the transmitter's entity-registry id, which
-survives entity renames. Stored radios with no hardware are kept (a node
+survives entity renames, and to the receiver reference; a reference the
+hardware doesn't report right now is kept. Stored radios with no hardware are kept (a node
 may just be offline) and noted.
 """
 
@@ -111,6 +112,7 @@ def reconcile(stored: list[Radio], found: list[FoundRadio]) -> Reconciled:
 
     for radio in result.radios:
         if (hardware := result.links.get(radio.id)) is not None:
-            radio.transmitter = hardware.transmitter
-            radio.receiver = hardware.receiver
+            # An offline node may not report every endpoint: keep what is known.
+            radio.transmitter = hardware.transmitter or radio.transmitter
+            radio.receiver = hardware.receiver or radio.receiver
     return result

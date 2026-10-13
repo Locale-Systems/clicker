@@ -153,13 +153,27 @@ async def test_esphome_reload_relistens(
     esphome = hass.config_entries.async_get_entry(NODE_ENTRY)
     assert esphome is not None
 
+    # Reloaded: new runtime data, loaded before the node reconnects, and
+    # until then ESPHome only knows the transmitter.
     node.set_available(False)
+    connected = found_radios[0]
+    found_radios[0] = dataclasses.replace(connected, receiver=None, receiver_handle=None)
     reloaded = FakeNode()
+    reloaded.available = False
     esphome.runtime_data = reloaded
     esphome.mock_state(hass, ConfigEntryState.LOADED)
     await hass.async_block_till_done()
-    assert hub.listening == {NODE_ENTRY: True}
-    assert reloaded.client.subscribe_calls == 1 and not node.device_callbacks
+    assert hub.listening == {NODE_ENTRY: False} and not node.device_callbacks
+    assert entry.runtime_data.data.radios[0].receiver == connected.receiver
+
+    found_radios[0] = connected
+    reloaded.set_available(True)
+    await hass.async_block_till_done()
+    assert hub.listening == {NODE_ENTRY: True} and reloaded.client.subscribe_calls == 1
+    events = async_capture_events(hass, EVENT_COMMAND_RECEIVED)
+    reloaded.client.send(corpus.HELD_CAPTURE)
+    await hass.async_block_till_done()
+    assert [e.data["command"] for e in events] == ["Power"]
 
 
 @pytest.mark.usefixtures("patio_fan")

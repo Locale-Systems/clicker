@@ -152,11 +152,12 @@ class ReceiveHub:
             for radio_id, found in self._runtime.links.items()
             if found.receiver_handle is not None
         }
-        wanted: dict[str, Any] = {}
-        for entry_id, _device_id, _key in self._routes:
-            entry = self._hass.config_entries.async_get_entry(entry_id)
-            if entry is not None and entry.state is ConfigEntryState.LOADED:
-                wanted[entry_id] = entry.runtime_data
+        # Every loaded node, routed or not: a node that is still connecting
+        # lists no receivers yet, and its reconnect is what triggers discovery.
+        wanted: dict[str, Any] = {
+            entry.entry_id: entry.runtime_data
+            for entry in self._hass.config_entries.async_loaded_entries(ESPHOME_DOMAIN)
+        }
         for entry_id, listener in list(self._listeners.items()):
             if wanted.get(entry_id) is not listener.entry_data:  # gone or reloaded
                 listener.async_stop()

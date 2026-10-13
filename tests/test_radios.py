@@ -95,6 +95,17 @@ kept = reconcile([offline], [wesp32()])
 check(offline in kept.radios and offline.id not in kept.links, "offline: radio dropped or linked")
 check(offline.transmitter == "radio_frequency.shed", "offline: references changed")
 
+# Online again but its receiver unlisted (ESPHome only kept the transmitter).
+known = Radio(
+    name="Gateway",
+    frequency_hz=F433,
+    transmitter="reg-tx-433",
+    receiver="AA:BB:CC:DD:EE:FF:0:rf_receiver",
+)
+partial = reconcile([known], [wesp32(receiver=False)])
+check(known.id in partial.links, "partial: not linked")
+check(known.receiver == "AA:BB:CC:DD:EE:FF:0:rf_receiver", "partial: receiver reference lost")
+
 rx_only = reconcile(
     [], [FoundRadio("rx-node", "RX node", F433, (F433, F433), receiver="11:22:33:44:55:66:0:rx")]
 )
