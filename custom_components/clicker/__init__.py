@@ -15,6 +15,7 @@ from .const import DOMAIN
 from .core.models import ModelError
 from .hub import ReceiveHub
 from .runtime import ClickerConfigEntry, ClickerRuntime
+from .sender import SendQueue
 from .services import async_setup_services
 from .storage import ClickerStore
 
@@ -50,6 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
         )
 
     runtime.hub = ReceiveHub(hass, runtime, _refresh)
+    runtime.sender = SendQueue(hass, runtime)
     entry.async_on_unload(runtime.hub.async_stop)
     _refresh()
     entry.async_on_unload(async_track_time_interval(hass, _refresh, RADIO_REFRESH_INTERVAL))

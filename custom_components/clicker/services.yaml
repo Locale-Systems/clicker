@@ -1,1 +1,21 @@
 import_rf_device_manager:
+
+send_command:
+  fields:
+    device:
+      required: true
+      example: "Patio Fan"
+      selector:
+        text:
+    command:
+      required: true
+      example: "Power"
+      selector:
+        text:
+    frames_on_air:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 64
+          mode: box

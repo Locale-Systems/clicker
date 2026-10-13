@@ -14,6 +14,24 @@
     "import_rf_device_manager": {
       "name": "Import from RF Device Manager",
       "description": "Copies the devices and codes stored by the RF Device Manager integration into Clicker, re-encoding each code. Devices Clicker already has (by name) are skipped, so it is safe to run again."
+    },
+    "send_command": {
+      "name": "Send command",
+      "description": "Sends one of a Clicker device's commands through its radio. Sends on one radio go out one at a time.",
+      "fields": {
+        "device": {
+          "name": "Device",
+          "description": "The Clicker device, by name or id."
+        },
+        "command": {
+          "name": "Command",
+          "description": "The command, by name or id."
+        },
+        "frames_on_air": {
+          "name": "Frames on air",
+          "description": "How many frames to send this time, instead of the command's own setting."
+        }
+      }
     }
   }
 }

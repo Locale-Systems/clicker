@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import pathlib
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.clicker.const import DOMAIN
+from custom_components.clicker.core.importer import import_rf_device_manager
 from custom_components.clicker.core.radios import FoundRadio
 
 # corpus.py (shared with the script suites) imports the core as top-level `core`.
@@ -98,3 +107,67 @@ def rf_device_manager_store(transmitter: str = "radio_frequency.hall_rf") -> dic
             },
         },
     }
+
+
+NODE_ENTRY = "esphome-node-entry"
+RX_KEY = 7
+
+
+class FakeClient:
+    """The parts of aioesphomeapi's client the hub uses."""
+
+    def __init__(self) -> None:
+        self.receivers: list[Callable[[Any], None]] = []
+        self.subscribe_calls = 0
+
+    def subscribe_infrared_rf_receive(self, cb: Callable[[Any], None]) -> Callable[[], None]:
+        self.subscribe_calls += 1
+        self.receivers.append(cb)
+        return lambda: self.receivers.remove(cb)
+
+    def send(self, timings: list[int], *, key: int = RX_KEY, device_id: int = 0) -> None:
+        """Deliver a reception, as the node would."""
+        event = SimpleNamespace(device_id=device_id, key=key, timings=timings)
+        for cb in list(self.receivers):
+            cb(event)
+
+
+class FakeNode:
+    """The parts of ESPHome's RuntimeEntryData the hub uses."""
+
+    def __init__(self) -> None:
+        self.available = True
+        self.client = FakeClient()
+        self.device_callbacks: set[Callable[[], None]] = set()
+
+    def async_subscribe_device_updated(self, cb: Callable[[], None]) -> Callable[[], None]:
+        self.device_callbacks.add(cb)
+        return lambda: self.device_callbacks.discard(cb)
+
+    def set_available(self, available: bool) -> None:
+        if not available:
+            self.client.receivers.clear()  # the connection takes its callbacks along
+        self.available = available
+        for cb in list(self.device_callbacks):
+            cb()
+
+
+@pytest.fixture
+def node(hass: HomeAssistant, found_radios: list[FoundRadio]) -> Generator[FakeNode]:
+    """A loaded ESPHome entry whose receiver feeds the discovered radio."""
+    fake = FakeNode()
+    entry = MockConfigEntry(domain="esphome", entry_id=NODE_ENTRY, title="wESP32")
+    entry.add_to_hass(hass)
+    entry.runtime_data = fake
+    entry.mock_state(hass, ConfigEntryState.LOADED)
+    found_radios[0] = dataclasses.replace(found_radios[0], receiver_handle=(NODE_ENTRY, 0, RX_KEY))
+    yield fake
+    entry.mock_state(hass, ConfigEntryState.NOT_LOADED)  # so teardown doesn't load ESPHome
+
+
+@pytest.fixture
+def patio_fan(hass_storage: dict[str, Any], found_radios: list[FoundRadio]) -> None:
+    """Stored data: the imported patio fan on the discovered radio."""
+    data = import_rf_device_manager(json.loads(json.dumps(rf_device_manager_store())), now=0).data
+    data.radios[0].transmitter = found_radios[0].transmitter
+    hass_storage[DOMAIN] = {"version": 1, "key": DOMAIN, "data": data.to_dict()}

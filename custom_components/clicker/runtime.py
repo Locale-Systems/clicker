@@ -14,6 +14,7 @@ from .core.models import ClickerData
 from .core.radios import FoundRadio, reconcile
 from .discovery import async_find_radios
 from .hub import ReceiveHub
+from .sender import SendQueue
 from .storage import ClickerStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class ClickerRuntime:
     reported: set[str] = field(default_factory=set)  # notes already logged
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # held while changing data
     hub: ReceiveHub | None = None
+    sender: SendQueue | None = None
     matcher: Matcher = field(init=False)
 
     def __post_init__(self) -> None:

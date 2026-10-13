@@ -7,20 +7,35 @@ import time
 from pathlib import Path
 from typing import Any
 
+import probatio as vol
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.util.json import load_json
 
 from .const import DOMAIN
 from .core.importer import import_rf_device_manager, merge_import
-from .core.models import ModelError
+from .core.models import Command, Device, ModelError, SendPolicy
 from .runtime import ClickerConfigEntry
+from .sender import describe
 
 _LOGGER = logging.getLogger(__name__)
 
 SERVICE_IMPORT_RF_DEVICE_MANAGER = "import_rf_device_manager"
+SERVICE_SEND_COMMAND = "send_command"
+ATTR_DEVICE = "device"
+ATTR_COMMAND = "command"
+ATTR_FRAMES_ON_AIR = "frames_on_air"
+
+SEND_COMMAND_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_DEVICE): cv.string,
+        vol.Required(ATTR_COMMAND): cv.string,
+        vol.Optional(ATTR_FRAMES_ON_AIR): vol.All(vol.Coerce(int), vol.Range(min=1, max=64)),
+    }
+)
 RF_DEVICE_MANAGER_STORAGE = ("rf_device_manager",)  # under .storage
 
 
@@ -29,6 +44,18 @@ def _loaded_entry(hass: HomeAssistant) -> ClickerConfigEntry:
     if not entries:
         raise ServiceValidationError("Clicker is not loaded")
     return entries[0]
+
+
+def _by_name_or_id[T: (Device, Command)](items: list[T], wanted: str, what: str) -> T:
+    """Find an item by id, or else by its name ignoring case."""
+    for item in items:
+        if item.id == wanted:
+            return item
+    named = [item for item in items if item.name.casefold() == wanted.casefold()]
+    if len(named) != 1:
+        problem = "No" if not named else "More than one"
+        raise ServiceValidationError(f"{problem} {what} named {wanted!r}")
+    return named[0]
 
 
 async def async_import_rf_device_manager(
@@ -66,6 +93,25 @@ async def async_import_rf_device_manager(
 
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register Clicker's actions."""
+
+    async def _send(call: ServiceCall) -> ServiceResponse:
+        runtime = _loaded_entry(hass).runtime_data
+        device = _by_name_or_id(runtime.data.devices, call.data[ATTR_DEVICE], "device")
+        command = _by_name_or_id(device.commands, call.data[ATTR_COMMAND], "command")
+        policy = None
+        if (frames := call.data.get(ATTR_FRAMES_ON_AIR)) is not None:
+            policy = SendPolicy(frames_on_air=frames)
+        assert runtime.sender is not None
+        sent = await runtime.sender.async_send(device, command, policy=policy, context=call.context)
+        return describe(sent) if call.return_response else None
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SEND_COMMAND,
+        _send,
+        schema=SEND_COMMAND_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
     async def _import(call: ServiceCall) -> ServiceResponse:
         response = await async_import_rf_device_manager(hass, _loaded_entry(hass))

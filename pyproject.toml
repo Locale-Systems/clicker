@@ -26,6 +26,11 @@ files = ["custom_components/clicker"]
 # Derived from rf_device_manager; not typed to this standard.
 exclude = ["custom_components/clicker/core/(decoders|rf_analysis)\\.py$"]
 
+[[tool.mypy.overrides]]
+# Home Assistant's radio_frequency library ships without type information.
+module = ["rf_protocols.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 # The plain-script suites in tests/ run with `python3 -I tests/X.py`.
 testpaths = ["tests/ha"]
