@@ -42,6 +42,15 @@ class Reception:
         """Return whether the capture decoded to bits."""
         return self.bits is not None
 
+    @property
+    def reliable(self) -> bool:
+        """Return whether the bits are certain: decoded, with two frames agreeing.
+
+        A reception bit error would have to hit the same bit of most frames
+        to survive the majority vote, so reliable bits are taken as exact.
+        """
+        return self.decoded and self.agreeing_frames >= 2
+
 
 def frame_fingerprint(frame: list[int]) -> str | None:
     """Return the matching key of one frame.

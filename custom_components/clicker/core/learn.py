@@ -8,9 +8,10 @@ live and never depends on arrival order:
 1. **Rank** groups by sightings, then decoded before raw, then agreeing
    frames (a held button yields several identical frames per capture).
 2. **Fold** a group into a stronger one when they are the same button by the
-   matcher's own rule (``matcher.code_distance``): decoded bits within the
-   bit tolerance (reception bit errors), or similar raw frames. Learning
-   and matching therefore agree on what "the same button" means.
+   matcher's own rule (``matcher.code_distance``): a weak reception whose
+   bits are within the bit tolerance (a reception bit error), or similar raw
+   frames. Two groups with reliable bits never fold, so sibling buttons a bit
+   apart stay separate. Learning and matching agree on "the same button".
 3. **Prune** undecodable groups seen once (noise, frames caught while the
    receiver's gain settled), but only when the top candidate is clearly a
    real press (seen twice, or decoded with two agreeing frames). Remotes no
@@ -82,8 +83,7 @@ def _rank(sightings: int, reception: Reception) -> tuple[int, int, int]:
 
 
 def _confident(folded: _Folded) -> bool:
-    reception = folded.group.reception
-    return folded.sightings >= 2 or (reception.decoded and reception.agreeing_frames >= 2)
+    return folded.sightings >= 2 or folded.group.reception.reliable
 
 
 class LearnSession:

@@ -5,13 +5,17 @@ Rules:
 - **Frequency first.** Only devices on the receiving radio's frequency are
   candidates. Matching is by frequency, not by radio, so several radios on
   one band all work.
-- **Closest command per device.** An identical fingerprint is distance 0;
-  otherwise decoded bits must be within ``rf_analysis.BIT_TOLERANCE``
-  (distance = differing bits), and undecodable codes need similar frame
-  timing (distance 1). Both are relative to a code's own base pulse, so a
-  remote whose timing drifts still matches. Sibling buttons often differ by a bit or two, so only
-  the nearest command of each device fires; ties go to the command listed
-  first. Different devices sharing a code all fire.
+- **Exact when certain, nearest otherwise.** An identical fingerprint is
+  distance 0. Reliable bits (two or more frames agreeing, see
+  ``Reception.reliable``) must be identical: a remote's sibling buttons often
+  differ by a single bit, so a near miss is another button, not an error.
+  Only a weak reception (one frame, or frames that disagree) may be within
+  ``rf_analysis.BIT_TOLERANCE`` of a code (distance = differing bits), and
+  undecodable codes need similar frame timing (distance 1). Both are relative
+  to a code's own base pulse, so a remote whose timing drifts still matches.
+- **Closest command per device.** Only the nearest command of each device
+  fires; ties go to the command listed first. Different devices sharing a
+  code all fire.
 - **One press, one match.** A command that matched is ignored again until
   its button has been quiet for ``release_gap_s``. The window slides with
   every repeated frame, so holding a toggle still counts once.
@@ -52,10 +56,15 @@ class _Code:
 
 
 def code_distance(heard: Reception, code: Reception) -> int | None:
-    """Return how far a reception is from a stored code, or None if unrelated."""
+    """Return how far a reception is from a stored code, or None if unrelated.
+
+    Not symmetric: only ``heard``'s reliability decides whether near bits count.
+    """
     if heard.fingerprint is not None and heard.fingerprint == code.fingerprint:
         return 0
     if heard.bits is not None or code.bits is not None:
+        if heard.reliable:
+            return None  # identical bits share the fingerprint, matched above
         if ra.bits_within_tolerance(heard.bits, code.bits):
             return ra.bit_distance(heard.bits, code.bits)
         return None

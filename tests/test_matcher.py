@@ -98,15 +98,28 @@ check(heard(press(code(POWER)), F303) == {(minka.id, minka_power.id)}, "303 MHz:
 check(heard(press(code(SPEED_1))) == {(patio.id, speed_1.id)}, "sibling: not exactly speed 1")
 check(heard(press(code(SPEED_2))) == {(patio.id, speed_2.id)}, "sibling: not exactly speed 2")
 one_bit_off = "000101111000101100000011"  # bit error far from the siblings' bits
-check(heard(press(code(one_bit_off))) == {(patio.id, power.id)}, "bit error: not the nearest")
+# A single frame can carry a reception bit error: the nearest command matches.
+check(heard(press(code(one_bit_off), 1)) == {(patio.id, power.id)}, "bit error: not the nearest")
+# Frames that agree are certain: one bit off is another button, not an error.
+check(heard(press(code(one_bit_off))) == set(), "reliable near miss: matched")
 check(heard(corpus.EV1527_A) == set(), "unrelated 64-bit code matched something")
 check(heard(raw_pattern(seed=3)) == {(shade.id, shade_cmd.id)}, "raw code: jittered press missed")
 check(heard(raw_pattern(OTHER_RAW_FRAME)) == set(), "raw code: a different pattern matched")
 # Matching is relative to a code's own base pulse, so the same pattern played
 # slower is the same code (as decoded bits are, whatever the pulse length).
 check(heard(raw_pattern(scale=1.6)) == {(shade.id, shade_cmd.id)}, "raw code: slower press missed")
-nearest = matcher.candidates(analyze(press(code(one_bit_off))), F433)[0]
+nearest = matcher.candidates(analyze(press(code(one_bit_off), 1)), F433)[0]
 check(nearest.distance == 1 and nearest.kind is CommandKind.TOGGLE, "match details")
+
+# The real patio fan remote: its unlearned Nature button is one bit from Speed 4.
+SPEED_4 = "000001111000101100010001"
+fan_speed_4 = Command(name="Speed 4", kind=CommandKind.STATE, frame=code(SPEED_4))
+fan = Device(name="Fan", radio_id=radio_433.id, frequency_hz=F433, commands=[fan_speed_4])
+fan_matcher = Matcher(ClickerData(radios=[radio_433], devices=[fan]))
+nature = analyze(corpus.NATURE_CAPTURE)
+check(nature.reliable and nature.bits == SPEED_4[:-1] + "0", "fixture: Nature decode")
+check(fan_matcher.candidates(nature, F433) == [], "Nature button matched Speed 4")
+check(bool(fan_matcher.candidates(analyze(press(code(SPEED_4))), F433)), "Speed 4 missed")
 
 # --- One press, one match ---------------------------------------------------------
 

@@ -94,6 +94,20 @@ for at, capture in enumerate([press(BIT_ERROR, 1), corpus.HELD_CAPTURE, press(HE
 found = session.candidates()
 check([c.bits for c in found] == [HELD_BITS], f"order: {[c.bits for c in found]}")
 
+# Sibling buttons one or two bits apart, each pressed for real, stay apart.
+POWER_BITS = "000001111000101100000001"  # the patio fan's Power; Nature is 2 bits away
+session = LearnSession(F433)
+for at, capture in enumerate(
+    [press(POWER_BITS, 6), press(POWER_BITS, 6)] + [corpus.NATURE_CAPTURE] * 3
+):
+    session.add(capture, F433, float(at))
+found = session.candidates()
+check(
+    sorted((c.bits, c.sightings, c.variants) for c in found)
+    == sorted([(POWER_BITS, 2, 1), ("000001111000101100010000", 3, 1)]),
+    f"siblings: {[(c.bits, c.sightings, c.variants) for c in found]}",
+)
+
 # --- What a session ignores --------------------------------------------------------
 
 session = LearnSession(F433)
