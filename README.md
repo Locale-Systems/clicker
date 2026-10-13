@@ -16,7 +16,7 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 
 | Path | What |
 | --- | --- |
-| `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`) and the shared receive analysis (`receive.py`) |
+| `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`) and the matcher (`matcher.py`) |
 | `tests/` | One suite per core module, plus the capture corpus |
 | `tools/report.py` | Reports which captures can be sent as encoded frames, and prints ready-to-run `send_raw` actions for testing on air |
 
@@ -28,12 +28,13 @@ python3 -I tests/test_encoder.py
 python3 -I tests/test_models.py
 python3 -I tests/test_stream.py
 python3 -I tests/test_receive.py
+python3 -I tests/test_matcher.py
 python3 -I tools/report.py                      # built-in corpus
 python3 -I tools/report.py --storage FILE       # every code in rf_device_manager's .storage/rf_device_manager
 python3 -I tools/report.py --storage FILE --emit radio_frequency.TRANSMITTER
 ```
 
-Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library; `models.py`, `encoder.py`, `stream.py` and `receive.py` are checked with `mypy --strict`.
+Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library; Every module except the two derived from rf_device_manager is checked with `mypy --strict`.
 
 ## Credits
 
