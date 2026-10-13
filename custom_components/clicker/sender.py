@@ -82,10 +82,12 @@ class SendQueue:
         *,
         policy: SendPolicy | None = None,
         context: Context | None = None,
+        pause_after_s: float = 0.0,
     ) -> Sent:
         """Send a command on a radio, after any sends already queued there.
 
         The command needn't be stored: learn candidates are tested this way.
+        ``pause_after_s`` keeps the radio quiet that much longer afterwards.
         """
         transmitter = self._transmitter(radio)
         try:
@@ -99,7 +101,7 @@ class SendQueue:
                 await self._sleep(wait)
             started = self._clock()
             self._runtime.matcher.note_transmission(radio.frequency_hz, started, plan.airtime_s)
-            self._busy_until[radio.id] = started + plan.airtime_s + SETTLE_GAP_S
+            self._busy_until[radio.id] = started + plan.airtime_s + SETTLE_GAP_S + pause_after_s
             await async_send_command(
                 self._hass,
                 transmitter,

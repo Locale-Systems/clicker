@@ -32,6 +32,28 @@
           "description": "How many frames to send this time, instead of the command's own setting."
         }
       }
+    },
+    "set_assumed_state": {
+      "name": "Set assumed state",
+      "description": "Corrects what Home Assistant assumes a fan is doing, without sending anything. Use it when the fan and Home Assistant disagree, for example after a remote press was missed.",
+      "fields": {
+        "is_on": {
+          "name": "On",
+          "description": "Whether the fan is running."
+        },
+        "percentage": {
+          "name": "Speed",
+          "description": "The speed, as a percentage; 0 means off."
+        },
+        "oscillating": {
+          "name": "Oscillating",
+          "description": "Whether the fan oscillates."
+        },
+        "direction": {
+          "name": "Direction",
+          "description": "Forward or reverse."
+        }
+      }
     }
   }
 }

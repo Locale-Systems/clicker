@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import config_validation as cv
@@ -23,6 +23,7 @@ from .websocket import async_setup_websocket
 __all__ = ["ClickerConfigEntry", "ClickerRuntime"]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+PLATFORMS = [Platform.FAN]
 
 # ESPHome nodes connect and reconnect on their own schedule; look again regularly.
 RADIO_REFRESH_INTERVAL = timedelta(seconds=60)
@@ -55,6 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
     runtime.hub = ReceiveHub(hass, runtime, _refresh)
     runtime.sender = SendQueue(hass, runtime)
     entry.async_on_unload(runtime.hub.async_stop)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _refresh()
     entry.async_on_unload(async_track_time_interval(hass, _refresh, RADIO_REFRESH_INTERVAL))
     if not hass.is_running:
@@ -68,8 +70,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> bool:
-    """Unload Clicker; listeners registered with async_on_unload are removed."""
-    return True
+    """Unload Clicker's entities; listeners registered with async_on_unload go too."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> None:

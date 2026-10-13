@@ -29,7 +29,7 @@ from homeassistant.config_entries import (
     ConfigEntryChange,
     ConfigEntryState,
 )
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
 from .const import DOMAIN, ESPHOME_DOMAIN
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 EVENT_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"
-SIGNAL_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"  # dispatcher: (Match, at)
+SIGNAL_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"  # dispatcher: (Match, at, Context)
 # A held button can fill the receiver's buffer; the first frames are enough.
 MAX_ANALYZED_TIMINGS = 2000
 RECENT_RECEPTIONS = 25
@@ -224,6 +224,9 @@ class ReceiveHub:
         command = device.command(match.command_id) if device is not None else None
         if device is None or command is None:
             return None
+        # One context per press: the event and the state changes it causes
+        # share it, so automations can tell remote presses from their own.
+        context = Context()
         self._hass.bus.async_fire(
             EVENT_REMOTE_PRESSED,
             {
@@ -235,6 +238,7 @@ class ReceiveHub:
                 "radio_id": radio_id,
                 "distance": match.distance,
             },
+            context=context,
         )
-        async_dispatcher_send(self._hass, SIGNAL_REMOTE_PRESSED, match, at)
+        async_dispatcher_send(self._hass, SIGNAL_REMOTE_PRESSED, match, at, context)
         return f"{device.name} / {command.name}"

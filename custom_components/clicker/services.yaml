@@ -19,3 +19,28 @@ send_command:
           min: 1
           max: 64
           mode: box
+
+set_assumed_state:
+  target:
+    entity:
+      integration: clicker
+      domain: fan
+  fields:
+    is_on:
+      selector:
+        boolean:
+    percentage:
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    oscillating:
+      selector:
+        boolean:
+    direction:
+      selector:
+        select:
+          options:
+            - forward
+            - reverse

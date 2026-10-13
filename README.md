@@ -16,8 +16,8 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 
 | Path | What |
 | --- | --- |
-| `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`), the matcher (`matcher.py`), learn-candidate grouping (`learn.py`), the editing rules (`edit.py`) and the rf_device_manager importer (`importer.py`) |
-| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the receive hub (`hub.py`), the send queue (`sender.py`), actions (`services.py`), the panel's websocket API (`websocket.py`) and diagnostics |
+| `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`), the matcher (`matcher.py`), learn-candidate grouping (`learn.py`), the editing rules (`edit.py`), fan remote rules (`fan.py`) and the rf_device_manager importer (`importer.py`) |
+| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the receive hub (`hub.py`), the send queue (`sender.py`), actions (`services.py`), the panel's websocket API (`websocket.py`), entities (`entity.py`, `fan.py`) and diagnostics |
 | `tests/` | One suite per core module, plus the capture corpus |
 | `tests/ha/` | Home Assistant tests (pytest-homeassistant-custom-component) |
 | `tools/import_rfdm.py` | Previews importing rf_device_manager's storage file, and can write the result as Clicker data |
@@ -36,6 +36,7 @@ python3 -I tests/test_importer.py
 python3 -I tests/test_learn.py
 python3 -I tests/test_radios.py
 python3 -I tests/test_edit.py
+python3 -I tests/test_fan.py
 python3 -I tools/report.py                      # built-in corpus
 python3 -I tools/report.py --storage FILE       # every code in rf_device_manager's .storage/rf_device_manager
 python3 -I tools/report.py --storage FILE --emit radio_frequency.TRANSMITTER
@@ -52,6 +53,19 @@ uv pip install --python .venv-ha -r requirements_test.txt
 ```
 
 Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library. Every module except the two derived from rf_device_manager is checked with `mypy --strict`.
+
+### Fans
+
+A binding with platform `fan` becomes a fan entity, built from the roles it has, since fan remotes differ:
+
+| Feature | Toggle | Explicit buttons |
+| --- | --- | --- |
+| Power | `power` | `off`, plus `on` and/or speeds |
+| Speed | | `speed_1` … `speed_<n>` |
+| Oscillation | `oscillate` | `oscillate_on`, `oscillate_off` |
+| Direction | `direction` (reverse) | `direction_forward`, `direction_reverse` |
+
+Toggles are sent only when the state has to change. On a power-toggle fan, a speed from off sends power first; on an explicit-power fan, the speed buttons switch it on. Remote presses move the assumed state the same way, with the context of their `clicker_remote_pressed` event. If a press is missed and the fan and Home Assistant disagree, **Clicker: Set assumed state** (`clicker.set_assumed_state`) corrects the state without sending anything.
 
 ### Sending
 
