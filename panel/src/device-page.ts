@@ -6,6 +6,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { deleteCommand, errorMessage, sendCommand, updateCommand, updateDevice } from "./api";
+import "./learn-drawer";
 import {
   KIND_HINTS,
   KIND_LABELS,
@@ -43,6 +44,7 @@ export class ClickerDevicePage extends LitElement {
   @state() private _confirmDelete?: string; // command id
   @state() private _sending = new Set<string>();
   @state() private _settings?: { name: string; area: string; radio: string };
+  @state() private _learning = false;
 
   private _toast(message: string): void {
     this.dispatchEvent(
@@ -185,10 +187,16 @@ export class ClickerDevicePage extends LitElement {
       <div class="card">
         <div class="card-title">
           Commands <span class="meta">${this.device.commands.length}</span>
+          <span class="spacer"></span>
+          ${this._learning
+            ? nothing
+            : html`<button @click=${() => (this._learning = true)}>
+                <ha-icon icon="mdi:plus"></ha-icon> Learn
+              </button>`}
         </div>
         ${this.device.commands.length
           ? this.device.commands.map((c) => this._renderCommand(c, usage.get(c.id) ?? []))
-          : html`<div class="meta">No commands yet. Learning comes next.</div>`}
+          : html`<div class="meta">No commands yet. Press Learn, then press buttons on the remote.</div>`}
       </div>
     `;
   }
@@ -328,7 +336,16 @@ export class ClickerDevicePage extends LitElement {
     return html`
       <div class="layout">
         <div class="column">${this._renderCommands()}</div>
-        <div class="column">${this._renderSettings()} ${this._renderEntities()}</div>
+        <div class="column">
+          ${this._learning
+            ? html`<clicker-learn-drawer
+                .hass=${this.hass}
+                .device=${this.device}
+                @close=${() => (this._learning = false)}
+              ></clicker-learn-drawer>`
+            : nothing}
+          ${this._renderSettings()} ${this._renderEntities()}
+        </div>
       </div>
     `;
   }
@@ -346,6 +363,15 @@ export class ClickerDevicePage extends LitElement {
         .layout {
           grid-template-columns: minmax(0, 1fr);
         }
+      }
+      .card-title button {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 400;
+      }
+      .card-title button ha-icon {
+        --mdc-icon-size: 18px;
       }
       .column {
         display: flex;

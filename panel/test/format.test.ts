@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  candidateMeta,
+  candidateTitle,
   commandUsage,
   count,
   describeUsage,
@@ -88,5 +90,27 @@ describe("format", () => {
       radio("m", "Minka", 303_870_000),
     ]);
     expect(choices.map((r) => r.id)).toEqual(["own", "a"]);
+  });
+
+  it("describes learn candidates", () => {
+    const candidate = {
+      fingerprint: "24b:x",
+      bits: "000001111000101100010000",
+      encoding: "pwm",
+      how: "6 complete frame(s), 6 agree on the bits",
+      sightings: 4,
+      variants: 1,
+      first_at: 0,
+      last_at: 0,
+      usable: true,
+      encoded: true,
+      known_as: [],
+    };
+    expect(candidateTitle(candidate)).toBe("24-bit code …00010000");
+    expect(candidateMeta(candidate)).toBe("Encoded · seen 4×");
+    const raw = { ...candidate, bits: null, encoded: false, variants: 2, sightings: 1 };
+    expect(candidateTitle(raw)).toBe("Raw code");
+    expect(candidateMeta(raw)).toBe("Raw replay · seen 1× · 2 variants");
+    expect(candidateMeta({ ...raw, usable: false })).toBe("Too short to use · seen 1× · 2 variants");
   });
 });

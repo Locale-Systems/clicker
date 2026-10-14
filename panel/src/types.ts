@@ -72,3 +72,23 @@ export interface ClickerData {
   devices: ClickerDevice[];
   problems: string[];
 }
+
+export interface LearnCandidate {
+  fingerprint: string;
+  bits: string | null;
+  encoding: string | null;
+  how: string;
+  sightings: number;
+  variants: number;
+  first_at: number;
+  last_at: number;
+  usable: boolean;
+  encoded: boolean;
+  known_as: { device: string; command: string; distance: number }[];
+}
+
+export interface LearnUpdate {
+  session_id: string;
+  frequency_hz: number;
+  candidates: LearnCandidate[];
+}

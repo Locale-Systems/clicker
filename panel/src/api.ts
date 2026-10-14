@@ -54,3 +54,24 @@ export function errorMessage(err: unknown): string {
   const message = (err as { message?: unknown } | undefined)?.message;
   return typeof message === "string" && message ? message : "Something went wrong. Try again.";
 }
+
+export const learnTest = (hass: Hass, sessionId: string, fingerprint: string) =>
+  hass.connection.sendMessagePromise<SendResult>({
+    type: "clicker/learn/test",
+    session_id: sessionId,
+    fingerprint,
+  });
+
+/** Save a candidate as a new command (name) or as the new code of command_id. */
+export const learnSave = (
+  hass: Hass,
+  sessionId: string,
+  fingerprint: string,
+  target: { name: string; kind: string } | { command_id: string },
+) =>
+  hass.connection.sendMessagePromise<ClickerCommand>({
+    type: "clicker/learn/save",
+    session_id: sessionId,
+    fingerprint,
+    ...target,
+  });

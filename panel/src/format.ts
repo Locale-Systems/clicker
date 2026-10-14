@@ -1,6 +1,12 @@
 // Pure helpers for what the panel shows; tested in test/format.test.ts.
 
-import type { ClickerDevice, ClickerRadio, HassArea, HassEntityState } from "./types";
+import type {
+  ClickerDevice,
+  ClickerRadio,
+  HassArea,
+  HassEntityState,
+  LearnCandidate,
+} from "./types";
 
 export function mhz(frequencyHz: number): string {
   return `${(frequencyHz / 1e6).toFixed(2)} MHz`;
@@ -117,4 +123,21 @@ export function radiosFor(device: ClickerDevice, radios: ClickerRadio[]): Clicke
   return radios
     .filter((r) => r.frequency_hz === device.frequency_hz)
     .sort((a, b) => (a.id === device.radio_id ? -1 : b.id === device.radio_id ? 1 : a.name.localeCompare(b.name)));
+}
+
+/** "24-bit code …00010000", or "Raw code" when it didn't decode. */
+export function candidateTitle(candidate: LearnCandidate): string {
+  if (!candidate.bits) return "Raw code";
+  const tail = candidate.bits.slice(-8);
+  return `${candidate.bits.length}-bit code ${candidate.bits.length > 8 ? "…" : ""}${tail}`;
+}
+
+/** "Encoded · seen 3× · 2 variants" */
+export function candidateMeta(candidate: LearnCandidate): string {
+  const parts = [
+    candidate.usable ? (candidate.encoded ? "Encoded" : "Raw replay") : "Too short to use",
+    `seen ${candidate.sightings}×`,
+  ];
+  if (candidate.variants > 1) parts.push(`${candidate.variants} variants`);
+  return parts.join(" · ");
 }
