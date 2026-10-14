@@ -19,7 +19,7 @@ sys.path[:0] = [str(ROOT / "custom_components" / "clicker"), str(ROOT / "tests")
 import corpus  # noqa: E402
 from core import rf_analysis as ra  # noqa: E402
 from core.models import SendPolicy, frame_from_capture  # noqa: E402
-from core.receive import analyze, analyze_code  # noqa: E402
+from core.receive import FrameChain, analyze, analyze_code  # noqa: E402
 from core.stream import plan_frame  # noqa: E402
 
 HELD_BITS = "000001111000101100000011"
@@ -79,6 +79,33 @@ check(analyze([400, -1200, 400]).how == "too short", "too short: reason")
 # A single frame cut off before its gap falls back to the frame as captured.
 cut = analyze(ra.split_frames(ra.trim_partial_frames(ra.normalize(corpus.HELD_CAPTURE)))[0][:-1])
 check(cut.unit is None and "dominant frame" in cut.how, "cut frame: should fall back")
+
+
+# --- Frames that arrive one per reception ---------------------------------------
+
+# The canopy remote's frames open with a header and arrive one at a time.
+open_frame = analyze(corpus.CANOPY_OPEN_FRAME)
+check(open_frame.bits == corpus.CANOPY_OPEN, f"canopy: decoded {open_frame.bits}")
+check(not open_frame.reliable, "canopy: one frame on its own should not be reliable")
+check(analyze(corpus.CANOPY_STOP_FRAME).bits == corpus.CANOPY_STOP, "canopy: Stop decode")
+check(analyze(corpus.CANOPY_RELEASE_FRAME).bits == corpus.CANOPY_RELEASE, "canopy: release decode")
+check(len(analyze(corpus.CANOPY_STOP_DROPPED).bits or "") == 39, "canopy: dropped pulse fixture")
+
+chain = FrameChain()
+first = chain.add("rx", open_frame, 0.0)
+second = chain.add("rx", analyze(corpus.CANOPY_OPEN_FRAME), 0.06)
+third = chain.add("rx", analyze(corpus.CANOPY_OPEN_FRAME), 0.12)
+check(first == open_frame, "chain: the first frame should pass through unchanged")
+check(second.reliable and second.agreeing_frames == 2, "chain: two frames should agree")
+check(third.agreeing_frames == 3 and third.complete_frames == 3, "chain: frames should add up")
+check(third.fingerprint == open_frame.fingerprint, "chain: fingerprint changed")
+# Other bits, another receiver, a pause or an undecoded frame start over.
+release = analyze(corpus.CANOPY_RELEASE_FRAME)
+check(chain.add("rx", release, 0.2).agreeing_frames == 1, "chain: other bits")
+check(chain.add("rx", release, 0.6).agreeing_frames == 1, "chain: after a pause")
+check(chain.add("rx2", release, 0.65).agreeing_frames == 1, "chain: other receiver")
+chain.add("rx", analyze(corpus.NOISE), 0.7)
+check(chain.add("rx", release, 0.75).agreeing_frames == 1, "chain: across noise")
 
 if failures:
     print("FAILURES:")

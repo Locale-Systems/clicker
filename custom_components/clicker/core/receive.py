@@ -16,7 +16,8 @@ bits rather than losing the last one to the sync.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from collections.abc import Hashable
+from dataclasses import dataclass, replace
 
 from . import rf_analysis as ra
 from .const import MIN_SIGNAL_PULSES
@@ -92,6 +93,45 @@ def analyze(timings: list[int]) -> Reception:
         agreeing_frames=search.agreeing_frames,
         how=how,
     )
+
+
+# Receptions this close together (seconds) on one receiver can be one press.
+FOLLOW_ON_S = 0.25
+
+
+class FrameChain:
+    """Let frames that arrive as separate receptions agree with each other.
+
+    A receiver ends a capture when the air has been idle for its idle time,
+    so a remote that pauses longer than that between frames (Dooya-style
+    motor remotes do) delivers every frame as its own reception: each one
+    has a single frame, and could never be reliable on its own. Here a
+    reception with the same bits as the previous one from the same receiver,
+    no more than :data:`FOLLOW_ON_S` later, adds its frames to that one's.
+    """
+
+    def __init__(self, follow_on_s: float = FOLLOW_ON_S) -> None:
+        self._follow_on_s = follow_on_s
+        self._last: dict[Hashable, tuple[float, Reception]] = {}
+
+    def add(self, receiver: Hashable, reception: Reception, at: float) -> Reception:
+        """Return ``reception``, counting the frames it follows on from."""
+        previous = self._last.get(receiver)
+        if (
+            reception.bits is not None
+            and previous is not None
+            and at - previous[0] <= self._follow_on_s
+            and previous[1].bits == reception.bits
+        ):
+            earlier = previous[1]
+            reception = replace(
+                reception,
+                complete_frames=earlier.complete_frames + reception.complete_frames,
+                agreeing_frames=earlier.agreeing_frames + reception.agreeing_frames,
+                how=f"{reception.how}; follows on from {earlier.agreeing_frames} agreeing",
+            )
+        self._last[receiver] = (at, reception)
+        return reception
 
 
 def analyze_code(frame: Frame) -> Reception:

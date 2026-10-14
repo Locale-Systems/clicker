@@ -88,6 +88,20 @@ try:
 except ValueError:
     pass
 
+
+# --- Frames that open with a header -----------------------------------------------
+
+for name in ("CANOPY_OPEN_FRAME", "CANOPY_RELEASE_FRAME", "CANOPY_STOP_FRAME"):
+    report = roundtrip(name, getattr(corpus, name))
+    check(report.status == "encoded", f"{name}: {report.status} ({report.reason})")
+    spec = CodeSpec.from_dict(report.spec or {})
+    check(spec.header is not None and spec.header[0] > 3000, f"{name}: header not measured")
+    check(spec.tail_bit and len(spec.bits) == 40, f"{name}: last bit not in the closing mark")
+    check(CodeSpec.from_dict(spec.to_dict()) == spec, f"{name}: spec does not survive storage")
+    frame = encode(spec)
+    check(len(frame) == len(getattr(corpus, name)), f"{name}: encoded {len(frame)} timings")
+    check(frame[0] == spec.header[0] and frame[-1] == -spec.sync[1], f"{name}: frame shape")
+
 if failures:
     print("\nFAILURES:")
     print("\n".join(failures))

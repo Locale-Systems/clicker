@@ -322,6 +322,36 @@ check(rf_analysis.prune_learn_candidates(raw_remote) == [0], "prune: raw remote 
 
 # ---------------------------------------------------------------------------
 
+
+# --- Header frames ---------------------------------------------------------------
+from core.decoders import decode_frame  # noqa: E402
+
+
+def header_frame(bits, zero, one, header, close):
+    """Header pair, one pair per bit, then ``close`` (a stop mark + gap, or a gap)."""
+    out = [header[0], -header[1]]
+    for bit in bits:
+        mark, space = one if bit == "1" else zero
+        out += [mark, -space]
+    if isinstance(close, int):
+        out[-1] = -close  # the last bit's space is the inter-frame gap
+    else:
+        out += [close[0], -close[1]]
+    return out
+
+
+# Dooya style: PWM bits after a header; the last bit's mark closes the frame.
+for last in "01":
+    bits = "000111100011000001000111011100010011001" + last
+    decoded = decode_frame(header_frame(bits, (260, 610), (560, 310), (3900, 1300), 15000))
+    check(decoded.get("bits") == bits, f"header PWM ending {last}: {decoded.get('bits')}")
+    check(decoded.get("tail_bit") is True, "header PWM: tail bit not flagged")
+# NEC style: space-distance bits after a header, then a stop mark that is no bit.
+nec = "00100000110111110001000011101111"
+decoded = decode_frame(header_frame(nec, (560, 560), (560, 1690), (9000, 4500), (560, 40000)))
+check(decoded.get("bits") == nec, f"header space distance: {decoded.get('bits')}")
+check("tail_bit" not in decoded, "header space distance: stop mark taken as a bit")
+
 if failures:
     print("\nFAILURES:")
     print("\n".join(failures))

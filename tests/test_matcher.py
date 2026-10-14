@@ -28,7 +28,7 @@ from core.models import (  # noqa: E402
     RawFrame,
     frame_from_capture,
 )
-from core.receive import analyze  # noqa: E402
+from core.receive import FrameChain, analyze  # noqa: E402
 
 F433, F303 = 433_920_000, 303_870_000
 POWER = "000001111000101100000011"  # the patio fan's real code
@@ -143,6 +143,37 @@ patio.commands.append(speed_3)
 check(heard(press(speed_3.frame)) == set(), "before rebuild: new command already matched")
 matcher.rebuild(data)
 check(heard(press(speed_3.frame)) == {(patio.id, speed_3.id)}, "after rebuild: not matched")
+
+
+# --- Remotes that send one frame per reception ----------------------------------------
+
+# The patio canopy remote: every frame arrives on its own. Open sends ...33
+# then its release code ...3c, which is 4 bits from Open and from Stop alike.
+canopy_open = Command(
+    name="Open", kind=CommandKind.BUTTON, frame=frame_from_capture(corpus.CANOPY_OPEN_FRAME)
+)
+canopy_stop = Command(
+    name="Stop", kind=CommandKind.BUTTON, frame=frame_from_capture(corpus.CANOPY_STOP_FRAME)
+)
+check(isinstance(canopy_open.frame, EncodedFrame), "canopy: Open should store encoded")
+canopy = Device(
+    name="Canopy", radio_id=radio_433.id, frequency_hz=F433, commands=[canopy_open, canopy_stop]
+)
+canopy_matcher = Matcher(ClickerData(radios=[radio_433], devices=[canopy]))
+# A weak reception as near to two of a device's commands is ambiguous.
+release = analyze(corpus.CANOPY_RELEASE_FRAME)
+check(canopy_matcher.candidates(release, F433) == [], "canopy: release code matched a button")
+chain = FrameChain()
+fired_names: list[str] = []
+names = {canopy_open.id: "Open", canopy_stop.id: "Stop"}
+presses = [(corpus.CANOPY_OPEN_FRAME, 0.06 * n) for n in range(4)]
+presses += [(corpus.CANOPY_RELEASE_FRAME, 0.27 + 0.06 * n) for n in range(4)]
+presses += [(corpus.CANOPY_STOP_DROPPED, 2.0)]
+presses += [(corpus.CANOPY_STOP_FRAME, 2.06 + 0.06 * n) for n in range(3)]
+for timings, at in presses:
+    for match in canopy_matcher.match(chain.add("rx", analyze(timings), at), F433, at):
+        fired_names.append(names[match.command_id])
+check(fired_names == ["Open", "Stop"], f"canopy: fired {fired_names}")
 
 if failures:
     print("FAILURES:")

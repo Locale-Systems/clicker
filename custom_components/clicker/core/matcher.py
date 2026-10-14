@@ -14,8 +14,10 @@ Rules:
   undecodable codes need similar frame timing (distance 1). Both are relative
   to a code's own base pulse, so a remote whose timing drifts still matches.
 - **Closest command per device.** Only the nearest command of each device
-  fires; ties go to the command listed first. Different devices sharing a
-  code all fire.
+  fires. A weak reception equally near two of a device's commands is
+  ambiguous and matches neither of them (a remote's release code, say,
+  that sits as far from every button). Different devices sharing a code all
+  fire.
 - **One press, one match.** A command that matched is ignored again until
   its button has been quiet for ``release_gap_s``. The window slides with
   every repeated frame, so holding a toggle still counts once.
@@ -116,6 +118,7 @@ class Matcher:
     def candidates(self, reception: Reception, frequency_hz: int) -> list[Match]:
         """Return the closest command per device on this frequency, ignoring time."""
         best: dict[str, Match] = {}
+        tied: set[str] = set()  # devices whose nearest distance two commands share
         for code in self._codes.get(frequency_hz, []):
             distance = code_distance(reception, code.heard_as)
             if distance is None:
@@ -125,7 +128,10 @@ class Matcher:
                 best[code.device_id] = Match(
                     code.device_id, code.command.id, code.command.kind, distance
                 )
-        return list(best.values())
+                tied.discard(code.device_id)
+            elif distance == current.distance and distance > 0:
+                tied.add(code.device_id)
+        return [match for device_id, match in best.items() if device_id not in tied]
 
     def match(self, reception: Reception, frequency_hz: int, at: float) -> list[Match]:
         """Return the presses this reception completes, applying debounce and echo rules."""

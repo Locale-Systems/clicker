@@ -57,6 +57,8 @@ class CodeSpec:
     zero: tuple[int, int] | None = None  # (mark, space) of a 0 bit
     one: tuple[int, int] | None = None  # (mark, space) of a 1 bit
     sync: tuple[int, int] = (0, 0)  # (mark, gap) closing the frame
+    header: tuple[int, int] | None = None  # (mark, space) opening the frame
+    tail_bit: bool = False  # the last bit's mark closes the frame; only sync's gap is used
     half: int = 0  # Manchester half period
     lead_half: bool = False  # Manchester: extra leading mark half
     gap: int = 0  # Manchester inter-frame gap
@@ -64,7 +66,7 @@ class CodeSpec:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-safe values."""
         data = asdict(self)
-        for key in ("zero", "one", "sync"):
+        for key in ("zero", "one", "sync", "header"):
             if data[key] is not None:
                 data[key] = list(data[key])
         return data
@@ -78,6 +80,8 @@ class CodeSpec:
             zero=_pair(data.get("zero")),
             one=_pair(data.get("one")),
             sync=_pair(data.get("sync")) or (0, 0),
+            header=_pair(data.get("header")),
+            tail_bit=bool(data.get("tail_bit", False)),
             half=int(data.get("half", 0)),
             lead_half=bool(data.get("lead_half", False)),
             gap=int(data.get("gap", 0)),
@@ -202,21 +206,22 @@ def extract_spec(unit: list[int]) -> tuple[CodeSpec | None, str]:
 
     if encoding in PAIR_ENCODINGS:
         context = FrameContext.from_frame(unit)
-        if context is None or len(context.bit_pairs) != len(bits):
+        tail_bit = bool(decoded.get("tail_bit"))
+        if context is None or len(context.bit_pairs) + tail_bit != len(bits):
             return None, "decoder pairs do not cover the bits"
-        if len(unit) != 2 * (len(bits) + 1):
-            return None, "frame has structure beyond bits + sync (preamble?)"
+        header_pairs = 0 if context.header_pair is None else 1
+        if len(unit) != 2 * (header_pairs + len(context.bit_pairs) + 1):
+            return None, "frame has structure beyond header + bits + sync (preamble?)"
+        pairs = list(zip(context.bit_pairs, bits, strict=False))
         return (
             CodeSpec(
                 encoding=encoding,
                 bits=bits,
-                zero=_median_pair(
-                    [p for p, b in zip(context.bit_pairs, bits, strict=True) if b == "0"]
-                ),
-                one=_median_pair(
-                    [p for p, b in zip(context.bit_pairs, bits, strict=True) if b == "1"]
-                ),
+                zero=_median_pair([p for p, b in pairs if b == "0"]),
+                one=_median_pair([p for p, b in pairs if b == "1"]),
                 sync=context.sync_pair,
+                header=context.header_pair,
+                tail_bit=tail_bit,
             ),
             "",
         )
@@ -241,11 +246,16 @@ def encode(spec: CodeSpec) -> list[int]:
     """Synthesize one frame (mark first, inter-frame gap last)."""
     if spec.encoding in PAIR_ENCODINGS:
         out: list[int] = []
+        if spec.header is not None:
+            out += [spec.header[0], -spec.header[1]]
         for bit in spec.bits:
             symbol = spec.one if bit == "1" else spec.zero
             if symbol is None:
                 raise ValueError(f"no timing measured for a {bit} bit")
             out += [symbol[0], -symbol[1]]
+        if spec.tail_bit:
+            out[-1] = -spec.sync[1]  # the last bit's space is the inter-frame gap
+            return out
         return out + [spec.sync[0], -spec.sync[1]]
 
     if spec.encoding == "manchester":

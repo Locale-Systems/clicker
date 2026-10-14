@@ -35,7 +35,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dis
 from .const import DOMAIN, ESPHOME_DOMAIN
 from .core.matcher import Match
 from .core.models import Radio
-from .core.receive import Reception, analyze
+from .core.receive import FrameChain, Reception, analyze
 from .devices import ha_device_id
 
 if TYPE_CHECKING:
@@ -136,6 +136,7 @@ class ReceiveHub:
         self._listeners: dict[str, _NodeListener] = {}
         self._routes: dict[tuple[str, int, int], str] = {}  # receiver handle -> radio id
         self.recent: deque[Heard] = deque(maxlen=RECENT_RECEPTIONS)
+        self._chain = FrameChain()
         # radio id -> (monotonic time, decoded, matched) of each reception in the window
         self._history: dict[str, deque[tuple[float, bool, bool]]] = {}
         self._reception_listeners: list[ReceptionListener] = []
@@ -215,7 +216,7 @@ class ReceiveHub:
         radio = data.radio(radio_id) if radio_id is not None else None
         if radio is None:
             return  # another endpoint on the node, or not linked (yet)
-        reception = analyze(timings[:MAX_ANALYZED_TIMINGS])
+        reception = self._chain.add(handle, analyze(timings[:MAX_ANALYZED_TIMINGS]), at)
         names: list[str] = []
         for match in self._runtime.matcher.match(reception, radio.frequency_hz, at):
             if (name := self._fire(match, radio.id, at)) is not None:

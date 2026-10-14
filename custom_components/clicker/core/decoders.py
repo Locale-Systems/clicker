@@ -131,6 +131,7 @@ class DecodedFrame:
     bits: str
     pulse_length: int
     protocol_guess: int | None = None
+    tail_bit: bool = False  # the last bit's mark closes the frame (see FrameContext)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +141,18 @@ class FrameContext:
     ``bit_pairs`` are the (mark, space) pairs carrying data; the final pair
     (``sync_pair``) carries the inter-frame sync gap and is excluded from
     bit decoding.
+
+    Some remotes (Dooya-style motor remotes, for one) open each frame with a
+    header instead: a long mark and space before the bits, and no sync mark
+    at the end, so the final pair is the last bit's mark followed by the
+    inter-frame gap::
+
+        ▔▔▔▔▔▔▔▔▔▔▁▁▁▁ ▔▔▁▁▁▁ ▔▔▔▔▁▁ ... ▔▔▔▔▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+        header         bit    bit       last mark + gap
+
+    ``header_pair`` holds that header and is excluded from ``bit_pairs``;
+    decoders that read a bit from its mark alone (PWM, pulse width) then read
+    the last bit from ``sync_pair``'s mark.
     """
 
     frame: list[int]
@@ -147,6 +160,7 @@ class FrameContext:
     sync_pair: tuple[int, int]
     marks: list[int]
     spaces: list[int]
+    header_pair: tuple[int, int] | None = None
 
     @classmethod
     def from_frame(cls, frame: list[int]) -> FrameContext | None:
@@ -160,6 +174,11 @@ class FrameContext:
         if len(pairs) < 5:
             return None
         *bit_pairs, sync_pair = pairs
+        header_pair = None
+        if len(bit_pairs) >= 5 and max(bit_pairs[0]) > HEADER_RATIO * max(
+            max(pair) for pair in bit_pairs[1:]
+        ):
+            header_pair, *bit_pairs = bit_pairs
         if len(bit_pairs) < 4:
             return None
         return cls(
@@ -168,7 +187,12 @@ class FrameContext:
             sync_pair=sync_pair,
             marks=[mark for mark, _ in bit_pairs],
             spaces=[space for _, space in bit_pairs],
+            header_pair=header_pair,
         )
+
+
+# A leading pair this many times longer than any bit pair is a header.
+HEADER_RATIO = 2.5
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +294,16 @@ def _decode_mark_width(context: FrameContext) -> DecodedFrame | None:
     split = _split_bimodal(context.marks)
     if split is None:
         return None
-    short_mean, _long, is_long = split
+    short_mean, long_mean, is_long = split
+    bits = "".join("1" if flag else "0" for flag in is_long)
+    if context.header_pair is not None:
+        last = context.sync_pair[0]
+        bits += "1" if abs(last - long_mean) < abs(last - short_mean) else "0"
     return DecodedFrame(
         encoding="mark_width",
-        bits="".join("1" if flag else "0" for flag in is_long),
+        bits=bits,
         pulse_length=round(short_mean),
+        tail_bit=context.header_pair is not None,
     )
 
 
@@ -306,6 +335,12 @@ def _decode_pwm(context: FrameContext) -> DecodedFrame | None:
         if mark_is_long == space_is_long:
             return None  # not a clean short/long PWM pair
         bits.append("1" if mark_is_long else "0")
+    if context.header_pair is not None:
+        last = context.sync_pair[0]
+        bits.append("1" if abs(last - long_mean) < abs(last - short) else "0")
+        return DecodedFrame(
+            encoding="pwm", bits="".join(bits), pulse_length=round(short), tail_bit=True
+        )
     return DecodedFrame(
         encoding="pwm",
         bits="".join(bits),
@@ -415,6 +450,8 @@ def decode_frame(frame: list[int]) -> dict[str, Any]:
         }
         if decoded.protocol_guess is not None:
             result["protocol_guess"] = decoded.protocol_guess
+        if decoded.tail_bit:
+            result["tail_bit"] = True
         if len(decoded.bits) % 2 == 0:
             groups = [
                 decoded.bits[i : i + 2] for i in range(0, len(decoded.bits), 2)

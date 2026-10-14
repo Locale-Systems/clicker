@@ -39,6 +39,24 @@ async def test_press_fires_once(hass: HomeAssistant, node: FakeNode) -> None:
 
 
 @pytest.mark.usefixtures("patio_fan")
+async def test_frames_follow_on(hass: HomeAssistant, node: FakeNode) -> None:
+    """Frames that arrive one per reception agree with each other."""
+    entry = await setup_clicker(hass)
+    hub = entry.runtime_data.hub
+    assert hub is not None
+    agreeing: list[int] = []
+    hub.async_add_listener(
+        lambda _heard, reception, _radio: agreeing.append(reception.agreeing_frames)
+    )
+
+    for _ in range(3):
+        node.client.send(corpus.CANOPY_OPEN_FRAME)
+    node.client.send(corpus.CANOPY_OPEN_FRAME, key=RX_KEY + 1)  # not a radio of ours
+    node.client.send(corpus.CANOPY_RELEASE_FRAME)
+    assert agreeing == [1, 2, 3, 1]
+
+
+@pytest.mark.usefixtures("patio_fan")
 async def test_other_receptions(hass: HomeAssistant, node: FakeNode) -> None:
     """Other endpoints are ignored; unknown codes are kept but fire nothing."""
     events = async_capture_events(hass, EVENT_REMOTE_PRESSED)
