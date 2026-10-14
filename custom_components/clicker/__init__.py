@@ -23,7 +23,7 @@ from .websocket import async_setup_websocket
 __all__ = ["ClickerConfigEntry", "ClickerRuntime"]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-PLATFORMS = [Platform.FAN, Platform.LIGHT]
+PLATFORMS = [Platform.BUTTON, Platform.FAN, Platform.LIGHT, Platform.SWITCH]
 
 # ESPHome nodes connect and reconnect on their own schedule; look again regularly.
 RADIO_REFRESH_INTERVAL = timedelta(seconds=60)

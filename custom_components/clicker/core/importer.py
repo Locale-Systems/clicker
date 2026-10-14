@@ -5,7 +5,8 @@ Mapping:
 - each rf_device_manager **device** becomes a Clicker :class:`Device`, plus
   one :class:`Radio` per transmitter + frequency it uses;
 - each rf_device_manager **code** (one entity) becomes a :class:`Binding`
-  on that device, with its slots as roles;
+  on that device, with its slots as roles; a light's brightness steps go to
+  a separate button binding, since they can't set an absolute brightness;
 - each **slot** becomes a :class:`Command`, re-encoded from its stored
   capture (which is kept as the command's source capture). Its kind follows
   the slot: toggles (power, oscillate, an on code with no off code) are
@@ -38,6 +39,7 @@ from .receive import analyze_code
 
 _TOGGLE_SLOTS = {"power", "oscillate"}
 _BUTTON_SLOTS = {"press", "stop", "brightness_up", "brightness_down"}
+_BRIGHTNESS_SLOTS = ("brightness_up", "brightness_down")
 _SLOT_NAMES = {
     "on": "On",
     "off": "Off",
@@ -156,8 +158,14 @@ def import_rf_device_manager(store: dict[str, Any], *, now: float) -> ImportResu
             result.notes.append(f"{device.name} / {label}: {kind.value}, {how}, {fingerprint}")
         if (code.get("settings") or {}).get("icon"):
             result.notes.append(f"{code_name}: icon not imported")
+        # Brightness steps can't give a light an absolute brightness: they
+        # become buttons beside it.
+        steps = {r: binding.roles.pop(r) for r in _BRIGHTNESS_SLOTS if r in binding.roles}
         if binding.roles:
             device.bindings.append(binding)
+        if steps:
+            device.bindings.append(Binding(platform="button", name=code_name, roles=steps))
+            result.notes.append(f"{code_name}: brightness steps imported as buttons")
 
     result.data = ClickerData(radios=list(radios.values()), devices=list(devices.values()))
     return result

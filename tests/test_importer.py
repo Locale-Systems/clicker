@@ -130,6 +130,9 @@ check(names["shade Stop"].kind is CommandKind.BUTTON, "stop: not a button")
 light = next(b for b in living.bindings if b.name == "Ceiling light")
 check(light.platform == "light" and "toggle" in light.roles, f"light roles {light.roles}")
 check(light.roles["toggle"] == names["Ceiling light On"].id, "role points to the wrong command")
+check(set(light.roles) == {"toggle"}, f"light kept its brightness steps: {light.roles}")
+steps = next(b for b in living.bindings if b.platform == "button" and b.name == "Ceiling light")
+check(set(steps.roles) == {"brightness_up", "brightness_down"}, f"brightness buttons {steps.roles}")
 
 # Codes re-encoded where they round-trip; noise kept raw; sources kept.
 check(isinstance(names["shade Open"].frame, EncodedFrame), "held capture: not encoded")

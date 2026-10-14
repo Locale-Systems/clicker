@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.const import STATE_ON
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
@@ -17,6 +18,7 @@ from .const import DOMAIN, SIGNAL_DATA_UPDATED
 from .core.fan import Step
 from .core.matcher import Match
 from .core.models import Binding, Device, ModelError
+from .core.onoff import OnOffPlan, OnOffRemote
 from .hub import SIGNAL_REMOTE_PRESSED
 from .runtime import ClickerConfigEntry, ClickerRuntime
 
@@ -37,13 +39,19 @@ class ClickerEntity[RemoteT](RestoreEntity):
     _attr_should_poll = False
 
     def __init__(
-        self, runtime: ClickerRuntime, device: Device, binding: Binding, remote: RemoteT
+        self,
+        runtime: ClickerRuntime,
+        device: Device,
+        binding: Binding,
+        remote: RemoteT,
+        key: str | None = None,
     ) -> None:
         self._runtime = runtime
         self.device = device
         self.binding = binding
         self.remote = remote
-        self._attr_unique_id = binding.id
+        self.key = key  # which of the binding's entities this is, when it has several
+        self._attr_unique_id = binding.id if key is None else f"{binding.id}:{key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.id)}, name=device.name, model="RF remote"
         )
@@ -53,6 +61,11 @@ class ClickerEntity[RemoteT](RestoreEntity):
     def remote_for(binding: Binding) -> RemoteT:
         """Build the rules from a binding's roles; raise ModelError if unusable."""
         raise NotImplementedError
+
+    @classmethod
+    def split(cls, binding: Binding) -> dict[str | None, RemoteT]:
+        """Return the entities a binding makes, by key: usually one, keyed None."""
+        return {None: cls.remote_for(binding)}
 
     def _set_name(self) -> None:
         # The device's main entity takes the device name, as HA recommends.
@@ -123,20 +136,21 @@ def async_track_bindings[EntityT: ClickerEntity[Any]](
     entity_class: type[EntityT],
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Keep one entity per binding of ``platform``, as bindings come and go."""
+    """Keep the entities of every ``platform`` binding, as bindings come and go."""
     runtime = entry.runtime_data
-    entities: dict[str, EntityT] = {}
+    entities: dict[tuple[str, str | None], EntityT] = {}
     refused: set[str] = set()  # bindings already reported as unusable
 
     @callback
     def _sync() -> None:
-        usable: dict[str, tuple[Device, Binding, Any]] = {}
+        usable: dict[tuple[str, str | None], tuple[Device, Binding, Any]] = {}
         for device in runtime.data.devices:
             for binding in device.bindings:
                 if binding.platform != platform:
                     continue
                 try:
-                    usable[binding.id] = (device, binding, entity_class.remote_for(binding))
+                    for key, remote in entity_class.split(binding).items():
+                        usable[binding.id, key] = (device, binding, remote)
                 except ModelError as err:
                     if binding.id not in refused:
                         _LOGGER.warning(
@@ -144,21 +158,22 @@ def async_track_bindings[EntityT: ClickerEntity[Any]](
                         )
                     refused.add(binding.id)
         refused.intersection_update(b.id for d in runtime.data.devices for b in d.bindings)
-        refused.difference_update(usable)
+        refused.difference_update(binding_id for binding_id, _key in usable)
 
         ent_reg = er.async_get(hass)
-        for binding_id in set(entities) - set(usable):
-            gone = entities.pop(binding_id)
+        for gone_key in set(entities) - set(usable):
+            gone = entities.pop(gone_key)
             if gone.registry_entry is not None:
                 ent_reg.async_remove(gone.entity_id)
             else:
                 hass.async_create_task(gone.async_remove(force_remove=True))
         new: list[EntityT] = []
-        for binding_id, (device, binding, remote) in usable.items():
-            if (entity := entities.get(binding_id)) is not None:
+        for (binding_id, key), (device, binding, remote) in usable.items():
+            if (entity := entities.get((binding_id, key))) is not None:
                 entity.update_binding(device, binding, remote)
             else:
-                entities[binding_id] = entity = entity_class(runtime, device, binding, remote)
+                entity = entity_class(runtime, device, binding, remote, key)
+                entities[binding_id, key] = entity
                 new.append(entity)
         if new:
             async_add_entities(new)
@@ -173,3 +188,51 @@ def unsupported(entity: ClickerEntity[Any], fields: dict[str, Any]) -> None:
         raise ServiceValidationError(
             f"{entity.entity_id} has no {', '.join(sorted(fields))} to set"
         )
+
+
+class OnOffEntity(ClickerEntity[OnOffRemote]):
+    """An on/off device (light, switch) driven by its remote's buttons."""
+
+    _on = False
+
+    @staticmethod
+    def remote_for(binding: Binding) -> OnOffRemote:
+        return OnOffRemote(binding.roles)
+
+    @property
+    def is_on(self) -> bool:
+        return self._on
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_state()) is not None:
+            self._on = last.state == STATE_ON
+
+    def pressed(self, role: str) -> bool:
+        old, self._on = self._on, self.remote.pressed(self._on, role)
+        return self._on != old
+
+    async def _run(self, plan: OnOffPlan) -> None:
+        """Show the new state, send; undo the state if sending fails."""
+        steps, new = plan
+        old, self._on = self._on, new
+        self.async_write_ha_state()
+        try:
+            await self.async_send_steps(steps)
+        except Exception:
+            self._on = old
+            self.async_write_ha_state()
+            raise
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._run(self.remote.set(self._on, True))
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._run(self.remote.set(self._on, False))
+
+    async def async_set_assumed_state(self, is_on: bool | None = None, **other: Any) -> None:
+        """Correct the assumed state without sending anything (after a missed press)."""
+        unsupported(self, other)
+        if is_on is not None:
+            self._on = is_on
+        self.async_write_ha_state()
