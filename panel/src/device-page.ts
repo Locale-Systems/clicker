@@ -5,7 +5,15 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { deleteCommand, errorMessage, sendCommand, updateCommand, updateDevice } from "./api";
+import {
+  deleteBinding,
+  deleteCommand,
+  errorMessage,
+  sendCommand,
+  updateCommand,
+  updateDevice,
+} from "./api";
+import "./entity-editor";
 import "./learn-drawer";
 import {
   KIND_HINTS,
@@ -18,7 +26,8 @@ import {
   type Usage,
 } from "./format";
 import { shared } from "./styles";
-import type { ClickerCommand, ClickerDevice, ClickerRadio, Hass } from "./types";
+import { detectTemplate } from "./templates";
+import type { ClickerBinding, ClickerCommand, ClickerDevice, ClickerRadio, Hass } from "./types";
 
 const PLATFORM_ICONS: Record<string, string> = {
   fan: "mdi:fan",
@@ -45,6 +54,8 @@ export class ClickerDevicePage extends LitElement {
   @state() private _sending = new Set<string>();
   @state() private _settings?: { name: string; area: string; radio: string };
   @state() private _learning = false;
+  @state() private _editingBinding?: string; // binding id, or "new"
+  @state() private _confirmRemove?: string; // binding id
 
   private _toast(message: string): void {
     this.dispatchEvent(
@@ -306,28 +317,102 @@ export class ClickerDevicePage extends LitElement {
     `;
   }
 
-  // --- Entities (read-only until the entity editor) ------------------------------
+  // --- Entities --------------------------------------------------------------
+
+  private async _removeBinding(binding: ClickerBinding): Promise<void> {
+    if (await this._call(() => deleteBinding(this.hass, this.device.id, binding.id), `Removed ${binding.name}`)) {
+      this._confirmRemove = undefined;
+    }
+  }
 
   private _renderEntities() {
-    const rows = this.device.bindings.flatMap((b) =>
-      (b.entity_ids.length ? b.entity_ids : [undefined]).map((entityId) => ({ b, entityId })),
-    );
+    const adding = this._editingBinding === "new";
     return html`
       <div class="card">
-        <div class="card-title">Entities</div>
-        ${rows.length
-          ? rows.map(({ b, entityId }) => {
-              const st = entityId ? this.hass.states[entityId] : undefined;
-              return html`<div class="entity">
-                <ha-icon .icon=${PLATFORM_ICONS[b.platform] ?? "mdi:remote"}></ha-icon>
-                <div class="row-main">
-                  <div>${(st?.attributes.friendly_name as string | undefined) ?? b.name}</div>
-                  <div class="meta">${entityId ?? "Not created"}</div>
-                </div>
-                <span class="meta">${entitySummary(st)}</span>
-              </div>`;
-            })
-          : html`<div class="meta">No entities yet.</div>`}
+        <div class="card-title">
+          Entities <span class="spacer"></span>
+          ${this._editingBinding || !this.device.commands.length
+            ? nothing
+            : html`<button @click=${() => (this._editingBinding = "new")}>
+                <ha-icon icon="mdi:plus"></ha-icon> Add
+              </button>`}
+        </div>
+        ${adding
+          ? html`<clicker-entity-editor
+              .hass=${this.hass}
+              .device=${this.device}
+              @close=${() => (this._editingBinding = undefined)}
+            ></clicker-entity-editor>`
+          : nothing}
+        ${this.device.bindings.length
+          ? this.device.bindings.map((b) => this._renderBinding(b))
+          : adding
+            ? nothing
+            : html`<div class="meta">
+                ${this.device.commands.length
+                  ? "No entities yet. Add one to control this device from Home Assistant."
+                  : "Learn some commands first, then add entities built from them."}
+              </div>`}
+      </div>
+    `;
+  }
+
+  private _renderBinding(binding: ClickerBinding) {
+    if (this._editingBinding === binding.id) {
+      return html`<div class="binding">
+        <clicker-entity-editor
+          .hass=${this.hass}
+          .device=${this.device}
+          .binding=${binding}
+          @close=${() => (this._editingBinding = undefined)}
+        ></clicker-entity-editor>
+      </div>`;
+    }
+    const { template } = detectTemplate(binding);
+    const confirming = this._confirmRemove === binding.id;
+    const entityIds = binding.entity_ids.length ? binding.entity_ids : [undefined];
+    return html`
+      <div class="binding">
+        <div class="entity">
+          <ha-icon .icon=${PLATFORM_ICONS[binding.platform] ?? "mdi:remote"}></ha-icon>
+          <div class="row-main">
+            <div>${binding.name}</div>
+            <div class="meta">${template.label}</div>
+          </div>
+          ${confirming
+            ? nothing
+            : html`<button
+                  class="icon"
+                  aria-label="Edit ${binding.name}"
+                  @click=${() => (this._editingBinding = binding.id)}
+                >
+                  <ha-icon icon="mdi:pencil"></ha-icon>
+                </button>
+                <button
+                  class="icon"
+                  aria-label="Remove ${binding.name}"
+                  @click=${() => (this._confirmRemove = binding.id)}
+                >
+                  <ha-icon icon="mdi:delete-outline"></ha-icon>
+                </button>`}
+        </div>
+        ${entityIds.map((entityId) => {
+          const st = entityId ? this.hass.states[entityId] : undefined;
+          return html`<div class="entity-state-row meta">
+            <span>${entityId ?? "Not created yet"}</span><span>${entitySummary(st)}</span>
+          </div>`;
+        })}
+        ${confirming
+          ? html`<div class="confirm">
+              Remove the ${binding.name} ${binding.platform === "button" ? "buttons" : binding.platform}?
+              ${binding.platform === "button" ? "Their" : "Its"} commands stay on the device.
+              <div class="actions">
+                <span class="spacer"></span>
+                <button @click=${() => (this._confirmRemove = undefined)}>Cancel</button>
+                <button class="danger" @click=${() => this._removeBinding(binding)}>Remove</button>
+              </div>
+            </div>`
+          : nothing}
       </div>
     `;
   }
@@ -444,6 +529,18 @@ export class ClickerDevicePage extends LitElement {
         align-items: center;
         gap: 10px;
         padding: 6px 0;
+      }
+      .binding {
+        padding: 6px 0;
+        border-top: 1px solid var(--divider-color);
+      }
+      .binding:first-of-type {
+        border-top: none;
+      }
+      .entity-state-row {
+        display: flex;
+        justify-content: space-between;
+        padding-left: 30px;
       }
       .entity ha-icon {
         color: var(--state-icon-color, var(--secondary-text-color));

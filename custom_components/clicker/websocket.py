@@ -9,8 +9,9 @@ Reading (any user):
 - ``clicker/command/send`` sends a stored command (the Test button).
 
 Changing (admin): ``clicker/device/{create,update,delete}``,
-``clicker/command/{update,delete}`` and ``clicker/radio/{update,delete}``,
-with the rules in :mod:`core.edit`.
+``clicker/command/{update,delete}``, ``clicker/radio/{update,delete}`` and
+``clicker/binding/{validate,create,update,delete}`` (entities), with the
+rules in :mod:`core.edit`.
 
 Learning (admin): ``clicker/learn/subscribe`` opens a learn session for a
 device and sends its ranked candidates every time a capture changes them;
@@ -391,6 +392,102 @@ async def ws_radio_delete(hass: HomeAssistant, connection: Connection, msg: Mess
     connection.send_result(msg["id"])
 
 
+ROLES = vol.Schema({str: str})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/binding/validate",
+        vol.Required("device_id"): str,
+        vol.Required("platform"): str,
+        vol.Required("roles"): ROLES,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_binding_validate(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Say whether these roles would make a working entity, and if not, why."""
+    device = edit.get_device(_runtime(hass).data, msg["device_id"])
+    try:
+        edit.check_binding(device, msg["platform"], msg["roles"])
+    except ModelError as err:
+        connection.send_result(msg["id"], {"ok": False, "error": str(err)})
+        return
+    connection.send_result(msg["id"], {"ok": True, "error": None})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/binding/create",
+        vol.Required("device_id"): str,
+        vol.Required("platform"): str,
+        vol.Required("name"): str,
+        vol.Required("roles"): ROLES,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_binding_create(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Add an entity built from some of a device's commands."""
+    runtime = _runtime(hass)
+    binding = await _change(
+        runtime,
+        lambda: edit.add_binding(
+            runtime.data, msg["device_id"], msg["platform"], msg["name"], msg["roles"]
+        ),
+    )
+    connection.send_result(msg["id"], {"id": binding.id})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/binding/update",
+        vol.Required("device_id"): str,
+        vol.Required("binding_id"): str,
+        vol.Optional("name"): str,
+        vol.Optional("roles"): ROLES,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_binding_update(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Rename an entity or change which commands drive it."""
+    runtime = _runtime(hass)
+    binding = await _change(
+        runtime,
+        lambda: edit.update_binding(
+            runtime.data,
+            msg["device_id"],
+            msg["binding_id"],
+            name=msg.get("name"),
+            roles=msg.get("roles"),
+        ),
+    )
+    connection.send_result(msg["id"], {"id": binding.id})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/binding/delete",
+        vol.Required("device_id"): str,
+        vol.Required("binding_id"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_binding_delete(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Remove an entity; its commands stay."""
+    runtime = _runtime(hass)
+    await _change(
+        runtime, lambda: edit.delete_binding(runtime.data, msg["device_id"], msg["binding_id"])
+    )
+    connection.send_result(msg["id"])
+
+
 # --- Learning -------------------------------------------------------------------
 
 
@@ -590,6 +687,10 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
         ws_command_delete,
         ws_radio_update,
         ws_radio_delete,
+        ws_binding_validate,
+        ws_binding_create,
+        ws_binding_update,
+        ws_binding_delete,
         ws_learn_subscribe,
         ws_learn_test,
         ws_learn_save,

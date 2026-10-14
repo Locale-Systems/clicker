@@ -75,3 +75,47 @@ export const learnSave = (
     fingerprint,
     ...target,
   });
+
+export const validateBinding = (
+  hass: Hass,
+  deviceId: string,
+  platform: string,
+  roles: Record<string, string>,
+) =>
+  hass.connection.sendMessagePromise<{ ok: boolean; error: string | null }>({
+    type: "clicker/binding/validate",
+    device_id: deviceId,
+    platform,
+    roles,
+  });
+
+export const createBinding = (
+  hass: Hass,
+  deviceId: string,
+  binding: { platform: string; name: string; roles: Record<string, string> },
+) =>
+  hass.connection.sendMessagePromise<{ id: string }>({
+    type: "clicker/binding/create",
+    device_id: deviceId,
+    ...binding,
+  });
+
+export const updateBinding = (
+  hass: Hass,
+  deviceId: string,
+  bindingId: string,
+  changes: { name?: string; roles?: Record<string, string> },
+) =>
+  hass.connection.sendMessagePromise<{ id: string }>({
+    type: "clicker/binding/update",
+    device_id: deviceId,
+    binding_id: bindingId,
+    ...changes,
+  });
+
+export const deleteBinding = (hass: Hass, deviceId: string, bindingId: string) =>
+  hass.connection.sendMessagePromise<null>({
+    type: "clicker/binding/delete",
+    device_id: deviceId,
+    binding_id: bindingId,
+  });

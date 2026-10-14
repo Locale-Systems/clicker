@@ -9,12 +9,29 @@ without changing anything. The rules:
   same frequency, since its codes were learned there;
 - deleting a command removes it from the bindings that use it (and drops a
   binding left with no roles); a radio can be deleted only once no device
-  uses it.
+  uses it;
+- a binding's roles point at its own device's commands, and its platform's
+  rules must accept them (a fan needs a way to switch off, ...); binding
+  names are unique per device and platform. Deleting a binding keeps its
+  commands.
 """
 
 from __future__ import annotations
 
-from .models import ClickerData, Command, CommandKind, Device, ModelError, Radio, SendPolicy
+from .fan import FanRemote
+from .models import (
+    Binding,
+    ClickerData,
+    Command,
+    CommandKind,
+    Device,
+    ModelError,
+    Radio,
+    SendPolicy,
+)
+from .onoff import OnOffRemote
+
+PLATFORMS = ("fan", "light", "switch", "button")
 
 
 class NotFoundError(ModelError):
@@ -175,3 +192,82 @@ def delete_radio(data: ClickerData, radio_id: str) -> Radio:
         raise ModelError(f"radio {radio.name!r} is used by {', '.join(users)}")
     data.radios.remove(radio)
     return radio
+
+
+def check_binding(device: Device, platform: str, roles: dict[str, str]) -> None:
+    """Raise ``ModelError`` unless these roles make a working entity of ``platform``."""
+    if platform not in PLATFORMS:
+        raise ModelError(f"unknown entity type {platform!r}; use one of {', '.join(PLATFORMS)}")
+    if not roles:
+        raise ModelError("pick at least one command")
+    for role, command_id in roles.items():
+        if not role.strip():
+            raise ModelError("a role can't be empty")
+        if device.command(command_id) is None:
+            raise ModelError(f"{device.name} has no command {command_id!r} (for {role})")
+    if platform == "fan":
+        FanRemote(roles)
+    elif platform in ("light", "switch"):
+        OnOffRemote(roles)
+
+
+def _check_binding_name(device: Device, platform: str, name: str, binding: Binding | None) -> str:
+    name = _name(name, "entity")
+    for other in device.bindings:
+        if other is not binding and other.platform == platform:
+            if other.name.casefold() == name.casefold():
+                raise ModelError(f"{device.name} already has a {platform} named {name!r}")
+    return name
+
+
+def get_binding(device: Device, binding_id: str) -> Binding:
+    """Return a device's binding, or raise ``NotFoundError``."""
+    if (binding := next((b for b in device.bindings if b.id == binding_id), None)) is None:
+        raise NotFoundError(f"{device.name} has no entity {binding_id!r}")
+    return binding
+
+
+def add_binding(
+    data: ClickerData, device_id: str, platform: str, name: str, roles: dict[str, str]
+) -> Binding:
+    """Add an entity to a device, built from some of its commands."""
+    device = get_device(data, device_id)
+    check_binding(device, platform, roles)
+    binding = Binding(
+        platform=platform,
+        name=_check_binding_name(device, platform, name, None),
+        roles=dict(roles),
+    )
+    device.bindings.append(binding)
+    return binding
+
+
+def update_binding(
+    data: ClickerData,
+    device_id: str,
+    binding_id: str,
+    *,
+    name: str | None = None,
+    roles: dict[str, str] | None = None,
+) -> Binding:
+    """Rename an entity or change its commands (its type is fixed)."""
+    device = get_device(data, device_id)
+    binding = get_binding(device, binding_id)
+    new_name = (
+        _check_binding_name(device, binding.platform, name, binding)
+        if name is not None
+        else binding.name
+    )
+    if roles is not None:
+        check_binding(device, binding.platform, roles)
+        binding.roles = dict(roles)
+    binding.name = new_name
+    return binding
+
+
+def delete_binding(data: ClickerData, device_id: str, binding_id: str) -> Binding:
+    """Remove an entity; the commands it used stay on the device."""
+    device = get_device(data, device_id)
+    binding = get_binding(device, binding_id)
+    device.bindings.remove(binding)
+    return binding

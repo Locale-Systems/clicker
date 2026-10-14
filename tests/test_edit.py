@@ -103,6 +103,39 @@ check([c.name for c in fan.commands] == ["Power"], "command not deleted")
 check([(b.name, b.roles) for b in fan.bindings] == [("Fan", {"power": power.id})], "bindings")
 check(data.problems() == [], f"problems after delete: {data.problems()}")
 
+# Bindings: built from the device's own commands, checked by platform rules.
+osc = edit.add_command(
+    fan,
+    Command(name="Oscillate", kind=CommandKind.TOGGLE, frame=frame_from_capture(corpus.EV1527_A)),
+)
+fan_entity = edit.add_binding(
+    data, fan.id, "fan", "Patio Fan", {"power": power.id, "oscillate": osc.id}
+)
+check(fan_entity in fan.bindings and fan_entity.roles["power"] == power.id, "add binding")
+refused(
+    lambda: edit.add_binding(data, fan.id, "fan", "Other", {"oscillate": osc.id}),
+    "fan without power",
+)
+refused(
+    lambda: edit.add_binding(data, fan.id, "light", "Lamp", {"on": power.id}), "light with on only"
+)
+refused(
+    lambda: edit.add_binding(data, fan.id, "cover", "Shade", {"open": power.id}), "unknown platform"
+)
+refused(lambda: edit.add_binding(data, fan.id, "button", "B", {"press": "nope"}), "missing command")
+refused(lambda: edit.add_binding(data, fan.id, "button", "B", {}), "no roles")
+refused(lambda: edit.add_binding(data, fan.id, "fan", "patio fan", {"power": power.id}), "dup name")
+light = edit.add_binding(data, fan.id, "light", "Patio Fan", {"toggle": osc.id})
+check(light.name == "Patio Fan", "same name on another platform is fine")
+edit.update_binding(data, fan.id, fan_entity.id, roles={"power": power.id}, name="Ceiling")
+check(fan_entity.roles == {"power": power.id} and fan_entity.name == "Ceiling", "update binding")
+refused(lambda: edit.update_binding(data, fan.id, fan_entity.id, roles={}), "update to no roles")
+check(fan_entity.roles == {"power": power.id}, "a refused update changed the roles")
+edit.delete_binding(data, fan.id, light.id)
+check(light not in fan.bindings and osc in fan.commands, "deleting a binding keeps its commands")
+edit.delete_binding(data, fan.id, fan_entity.id)
+edit.delete_command(data, fan.id, osc.id)
+
 # Radios: renamed freely, deleted only when unused.
 edit.rename_radio(data, hall.id, "Garage")
 check(hall.name == "Garage", "radio rename")

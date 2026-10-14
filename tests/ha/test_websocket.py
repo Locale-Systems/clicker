@@ -133,6 +133,44 @@ async def test_commands_and_radios(client: Client, hass_storage: dict[str, Any])
     assert await client.error("clicker/radio/delete", radio_id=radio["id"]) == "invalid_format"
 
 
+async def test_bindings(client: Client, hass: HomeAssistant, hass_storage: dict[str, Any]) -> None:
+    """Entities are validated, created, changed and deleted; commands stay."""
+    device = (await client.ok("clicker/data"))["devices"][0]
+    power, oscillate = (c["id"] for c in device["commands"])
+    checked = await client.ok(
+        "clicker/binding/validate",
+        device_id=device["id"],
+        platform="fan",
+        roles={"oscillate": oscillate},
+    )
+    assert checked == {"ok": False, "error": checked["error"]} and "power" in checked["error"]
+
+    created = await client.ok(
+        "clicker/binding/create",
+        device_id=device["id"],
+        platform="button",
+        name="Extras",
+        roles={"swing": oscillate},
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("button.patio_fan_oscillate") is not None
+    await client.ok(
+        "clicker/binding/update",
+        device_id=device["id"],
+        binding_id=created["id"],
+        roles={"swing": oscillate, "power": power},
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("button.patio_fan_power") is not None
+    assert await client.error(
+        "clicker/binding/create", device_id=device["id"], platform="light", name="L", roles={}
+    ) == ("invalid_format")
+    await client.ok("clicker/binding/delete", device_id=device["id"], binding_id=created["id"])
+    await hass.async_block_till_done()
+    assert hass.states.get("button.patio_fan_power") is None
+    assert len(stored(hass_storage).devices[0].commands) == 2
+
+
 async def test_changes_need_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,
