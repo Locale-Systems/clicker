@@ -82,7 +82,7 @@ If a press is missed and a device and Home Assistant disagree, **Clicker: Set as
 
 ### Remote presses
 
-Clicker listens to every receiver it has linked. A press that matches a stored command fires `clicker_remote_pressed` with `device`, `command`, `kind`, their ids, `radio_id` and `distance` (0 for an identical code). Holding a button counts once. The last 25 receptions, matched or not, are in the diagnostics; set `custom_components.clicker` to debug logging to see each one as it arrives.
+Clicker listens to every receiver it has linked. A press that matches a stored command fires `clicker_remote_pressed` with `device` and `command` (names), `kind`, `device_id` (the Home Assistant device), `clicker_device_id`, `command_id`, `radio_id` and `distance` (0 for an identical code), and shows in the logbook as, for example, "Patio Fan: Power pressed on the remote". Every Clicker device has a Home Assistant device, with or without entities. Holding a button counts once. The last 25 receptions, matched or not, are in the diagnostics; set `custom_components.clicker` to debug logging to see each one as it arrives.
 
 ### Importing from rf_device_manager
 

@@ -28,6 +28,7 @@ class ClickerRuntime:
     """Clicker's data, its store, the radios it is linked to and its matcher."""
 
     hass: HomeAssistant
+    entry_id: str
     store: ClickerStore
     data: ClickerData = field(default_factory=ClickerData)
     links: dict[str, FoundRadio] = field(default_factory=dict)  # radio id -> hardware

@@ -8,11 +8,13 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
 from .core.models import ModelError
+from .devices import async_track_devices
 from .hub import ReceiveHub
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import SendQueue
@@ -44,7 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
     except ModelError as err:
         # Leave the file alone: a newer Clicker wrote it.
         raise ConfigEntryError(f"Can't read Clicker's stored data: {err}") from err
-    runtime = ClickerRuntime(hass=hass, store=store, data=data)
+    runtime = ClickerRuntime(hass=hass, entry_id=entry.entry_id, store=store, data=data)
     entry.runtime_data = runtime
 
     @callback
@@ -56,6 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
     runtime.hub = ReceiveHub(hass, runtime, _refresh)
     runtime.sender = SendQueue(hass, runtime)
     entry.async_on_unload(runtime.hub.async_stop)
+    async_track_devices(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _refresh()
     entry.async_on_unload(async_track_time_interval(hass, _refresh, RADIO_REFRESH_INTERVAL))
@@ -72,6 +75,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> bool:
     """Unload Clicker's entities; listeners registered with async_on_unload go too."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ClickerConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Allow deleting a device in the UI only once Clicker no longer has it."""
+    ids = {i[1] for i in device.identifiers if i[0] == DOMAIN}
+    return not any(d.id in ids for d in entry.runtime_data.data.devices)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> None:

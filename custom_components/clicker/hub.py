@@ -36,6 +36,7 @@ from .const import DOMAIN, ESPHOME_DOMAIN
 from .core.matcher import Match
 from .core.models import Radio
 from .core.receive import Reception, analyze
+from .devices import ha_device_id
 
 if TYPE_CHECKING:
     from .runtime import ClickerRuntime
@@ -230,7 +231,10 @@ class ReceiveHub:
         self._hass.bus.async_fire(
             EVENT_REMOTE_PRESSED,
             {
-                "device_id": device.id,
+                # device_id is Home Assistant's, so the logbook and device
+                # pages find the press; clicker_device_id is Clicker's own.
+                "device_id": ha_device_id(self._hass, self._runtime.entry_id, device.id),
+                "clicker_device_id": device.id,
                 "device": device.name,
                 "command_id": command.id,
                 "command": command.name,
