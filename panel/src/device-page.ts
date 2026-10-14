@@ -445,9 +445,17 @@ export class ClickerDevicePage extends LitElement {
         </div>
         ${entityIds.map((entityId) => {
           const st = entityId ? this.hass.states[entityId] : undefined;
-          return html`<div class="entity-state-row meta">
-            <span>${entityId ?? "Not created yet"}</span><span>${entitySummary(st)}</span>
-          </div>`;
+          return entityId && st
+            ? html`<button
+                class="entity-state-row meta link"
+                title="Open ${entityId}"
+                @click=${() => this._moreInfo(entityId)}
+              >
+                <span class="entity-id">${entityId}</span><span>${entitySummary(st)}</span>
+              </button>`
+            : html`<div class="entity-state-row meta">
+                <span>${entityId ?? "Not created yet"}</span><span>${entitySummary(st)}</span>
+              </div>`;
         })}
         ${confirming
           ? html`<div class="confirm">
@@ -462,6 +470,13 @@ export class ClickerDevicePage extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  /** Open Home Assistant's more-info dialog: the entity's own controls. */
+  private _moreInfo(entityId: string): void {
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }),
+    );
   }
 
   render() {
@@ -589,6 +604,22 @@ export class ClickerDevicePage extends LitElement {
         display: flex;
         justify-content: space-between;
         padding-left: 30px;
+      }
+      button.entity-state-row {
+        width: 100%;
+        font-size: 13px;
+        color: var(--secondary-text-color);
+        background: none;
+        border: none;
+        border-radius: 4px;
+        padding: 2px 0 2px 30px;
+        text-align: left;
+      }
+      button.entity-state-row:hover {
+        background: var(--secondary-background-color);
+      }
+      button.entity-state-row .entity-id {
+        color: var(--primary-color);
       }
       .entity ha-icon {
         color: var(--state-icon-color, var(--secondary-text-color));

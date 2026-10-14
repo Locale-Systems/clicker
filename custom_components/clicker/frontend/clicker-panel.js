@@ -574,9 +574,15 @@ function e(e,t,i,s){var n,a=arguments.length,o=a<3?t:null===s?s=Object.getOwnPro
                   <ha-icon icon="mdi:delete-outline"></ha-icon>
                 </button>`}
         </div>
-        ${s.map(e=>{const t=e?this.hass.states[e]:void 0;return B`<div class="entity-state-row meta">
-            <span>${e??"Not created yet"}</span><span>${Oe(t)}</span>
-          </div>`})}
+        ${s.map(e=>{const t=e?this.hass.states[e]:void 0;return e&&t?B`<button
+                class="entity-state-row meta link"
+                title="Open ${e}"
+                @click=${()=>this._moreInfo(e)}
+              >
+                <span class="entity-id">${e}</span><span>${Oe(t)}</span>
+              </button>`:B`<div class="entity-state-row meta">
+                <span>${e??"Not created yet"}</span><span>${Oe(t)}</span>
+              </div>`})}
         ${i?B`<div class="confirm">
               Remove the ${e.name} ${"button"===e.platform?"buttons":e.platform}?
               ${"button"===e.platform?"Their":"Its"} commands stay on the device.
@@ -587,7 +593,7 @@ function e(e,t,i,s){var n,a=arguments.length,o=a<3?t:null===s?s=Object.getOwnPro
               </div>
             </div>`:W}
       </div>
-    `}render(){const e=this._learning?B`<clicker-learn-drawer
+    `}_moreInfo(e){this.dispatchEvent(new CustomEvent("hass-more-info",{detail:{entityId:e},bubbles:!0,composed:!0}))}render(){const e=this._learning?B`<clicker-learn-drawer
           .hass=${this.hass}
           .device=${this.device}
           @close=${()=>this._learning=!1}
@@ -702,6 +708,22 @@ function e(e,t,i,s){var n,a=arguments.length,o=a<3?t:null===s?s=Object.getOwnPro
         display: flex;
         justify-content: space-between;
         padding-left: 30px;
+      }
+      button.entity-state-row {
+        width: 100%;
+        font-size: 13px;
+        color: var(--secondary-text-color);
+        background: none;
+        border: none;
+        border-radius: 4px;
+        padding: 2px 0 2px 30px;
+        text-align: left;
+      }
+      button.entity-state-row:hover {
+        background: var(--secondary-background-color);
+      }
+      button.entity-state-row .entity-id {
+        color: var(--primary-color);
       }
       .entity ha-icon {
         color: var(--state-icon-color, var(--secondary-text-color));
