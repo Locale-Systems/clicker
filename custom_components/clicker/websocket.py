@@ -31,6 +31,8 @@ import probatio as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import DOMAIN, SIGNAL_DATA_UPDATED
@@ -103,16 +105,29 @@ def _command(command: Command) -> dict[str, Any]:
     }
 
 
-def _device(device: Device) -> dict[str, Any]:
+def _device(runtime: ClickerRuntime, device: Device) -> dict[str, Any]:
+    ha_device = dr.async_get(runtime.hass).async_get_device_by_identifier(
+        (DOMAIN, device.id), runtime.entry_id
+    )
+    entities: dict[str, list[str]] = {}  # binding id -> its entity ids
+    for entry in er.async_entries_for_config_entry(er.async_get(runtime.hass), runtime.entry_id):
+        entities.setdefault(entry.unique_id.split(":", 1)[0], []).append(entry.entity_id)
     return {
         "id": device.id,
         "name": device.name,
         "radio_id": device.radio_id,
         "frequency_hz": device.frequency_hz,
         "area_id": device.area_id,
+        "ha_device_id": ha_device.id if ha_device is not None else None,
         "commands": [_command(c) for c in device.commands],
         "bindings": [
-            {"id": b.id, "platform": b.platform, "name": b.name, "roles": b.roles}
+            {
+                "id": b.id,
+                "platform": b.platform,
+                "name": b.name,
+                "roles": b.roles,
+                "entity_ids": sorted(entities.get(b.id, [])),
+            }
             for b in device.bindings
         ],
     }
@@ -135,7 +150,7 @@ def _data(runtime: ClickerRuntime) -> dict[str, Any]:
     data = runtime.data
     return {
         "radios": [_radio(runtime, r) for r in data.radios],
-        "devices": [_device(d) for d in data.devices],
+        "devices": [_device(runtime, d) for d in data.devices],
         "problems": data.problems(),
     }
 
@@ -250,7 +265,7 @@ async def ws_device_create(hass: HomeAssistant, connection: Connection, msg: Mes
             runtime.data, msg["name"], msg["radio_id"], area_id=msg.get("area_id")
         ),
     )
-    connection.send_result(msg["id"], _device(device))
+    connection.send_result(msg["id"], _device(runtime, device))
 
 
 @websocket_api.websocket_command(
@@ -279,7 +294,7 @@ async def ws_device_update(hass: HomeAssistant, connection: Connection, msg: Mes
             radio_id=msg.get("radio_id"),
         ),
     )
-    connection.send_result(msg["id"], _device(device))
+    connection.send_result(msg["id"], _device(runtime, device))
 
 
 @websocket_api.websocket_command(

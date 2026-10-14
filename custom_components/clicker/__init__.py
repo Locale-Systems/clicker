@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .core.models import ModelError
 from .devices import async_track_devices
 from .hub import ReceiveHub
+from .panel import async_register_panel, async_remove_panel
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import SendQueue
 from .services import async_setup_services
@@ -60,6 +61,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClickerConfigEntry) -> b
     entry.async_on_unload(runtime.hub.async_stop)
     async_track_devices(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if await async_register_panel(hass):
+        entry.async_on_unload(lambda: async_remove_panel(hass))
     _refresh()
     entry.async_on_unload(async_track_time_interval(hass, _refresh, RADIO_REFRESH_INTERVAL))
     if not hass.is_running:

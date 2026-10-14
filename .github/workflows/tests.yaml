@@ -38,3 +38,20 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: pytest
+
+  panel:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # The build is committed (HACS installs need no build step): it must be current.
+      - run: git diff --exit-code ../custom_components/clicker/frontend

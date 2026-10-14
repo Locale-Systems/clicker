@@ -2,11 +2,14 @@
   "domain": "clicker",
   "name": "Clicker",
   "after_dependencies": [
-    "esphome"
+    "esphome",
+    "frontend",
+    "panel_custom"
   ],
   "codeowners": [],
   "config_flow": true,
   "dependencies": [
+    "http",
     "radio_frequency"
   ],
   "documentation": "https://github.com/Locale-Systems/clicker",

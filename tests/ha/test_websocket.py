@@ -66,6 +66,8 @@ async def test_data(client: Client, found_radios: list[FoundRadio]) -> None:
     assert radio["node"] == found_radios[0].title
     (device,) = data["devices"]
     assert device["name"] == "Patio fan" and device["radio_id"] == radio["id"]
+    assert device["ha_device_id"] is not None
+    assert [b["entity_ids"] for b in device["bindings"]] == [["fan.patio_fan_fan"]]
     power = device["commands"][0]
     assert power["name"] == "Power" and power["kind"] == "toggle"
     assert power["encoded"] and len(power["bits"]) == 24 and power["captures"] == 1

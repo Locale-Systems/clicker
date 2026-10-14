@@ -20,6 +20,7 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 | `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the receive hub (`hub.py`), the send queue (`sender.py`), actions (`services.py`), the panel's websocket API (`websocket.py`), entities (`entity.py`, `fan.py`, `light.py`, `switch.py`, `button.py`) and diagnostics |
 | `tests/` | One suite per core module, plus the capture corpus |
 | `tests/ha/` | Home Assistant tests (pytest-homeassistant-custom-component) |
+| `panel/` | The sidebar panel (Lit + TypeScript); its build is committed to `custom_components/clicker/frontend/` |
 | `tools/import_rfdm.py` | Previews importing rf_device_manager's storage file, and can write the result as Clicker data |
 | `tools/report.py` | Reports which captures can be sent as encoded frames, and prints ready-to-run `send_raw` actions for testing on air |
 
@@ -53,7 +54,19 @@ uv pip install --python .venv-ha -r requirements_test.txt
 .venv-ha/bin/mypy
 ```
 
+The panel builds with Node:
+
+```bash
+cd panel && npm install
+npm run typecheck && npm test
+npm run build      # writes custom_components/clicker/frontend/clicker-panel.js; commit it
+```
+
 Python 3.14 or later, matching Home Assistant's own minimum. The core uses only the standard library. Every module except the two derived from rf_device_manager is checked with `mypy --strict`.
+
+### The panel
+
+Clicker adds a **Clicker** entry to the sidebar for admins: your devices by area, with their radio, commands and entities, kept live as things change.
 
 ### Fans
 
