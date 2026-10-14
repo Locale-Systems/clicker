@@ -45,6 +45,8 @@ SIMILAR = 0.65
 # Receptions more than this far apart (seconds) are separate transmissions.
 BURST_GAP_S = 2.0
 MAX_SOURCES = 50
+# Captures kept per source, for exporting.
+SAMPLES = 3
 
 
 def _histogram(values: list[int]) -> tuple[float, ...]:
@@ -207,6 +209,7 @@ class Source:
     shape: Shape | None = None  # set for a shape
     pulses: int = 0  # timings in the latest reception
     count: int = 0
+    samples: deque[tuple[int, ...]] = field(default_factory=lambda: deque(maxlen=SAMPLES))
     bursts: deque[float] = field(default_factory=lambda: deque(maxlen=20))
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
@@ -313,6 +316,7 @@ class SourceTracker:
         source.last_seen = at
         source.count += 1
         source.pulses = len(timings)
+        source.samples.append(tuple(timings))
         return source
 
     def _code_source(self, radio_id: str, reception: Reception) -> Source | None:

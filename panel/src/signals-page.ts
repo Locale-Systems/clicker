@@ -6,7 +6,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 
-import { errorMessage, ignoreSource, unignoreSource } from "./api";
+import { errorMessage, exportCapture, ignoreSource, unignoreSource } from "./api";
 import { define } from "./define";
 import { heardTitle, mhz, radioLabel, sourceRhythm, statsLine } from "./format";
 import { shared } from "./styles";
@@ -21,6 +21,8 @@ import type {
 } from "./types";
 
 const KEEP = 200;
+// Clicker keeps the timings of only its last 25 receptions; older rows can't be downloaded.
+const EXPORTABLE = 25;
 
 @define("clicker-signals-page")
 export class ClickerSignalsPage extends LitElement {
@@ -73,6 +75,21 @@ export class ClickerSignalsPage extends LitElement {
       await ignoreSource(this.hass, source.id, name.trim());
       this._naming = undefined;
       this._toast(`Ignoring ${name.trim() || source.label}`);
+    } catch (err) {
+      this._toast(errorMessage(err));
+    }
+  }
+
+  /** Save a capture as an .ook file: for rtl_433, or to paste into an AI chat. */
+  private async _download(target: { heard_id: string } | { source_id: string }): Promise<void> {
+    try {
+      const { filename, content } = await exportCapture(this.hass, target);
+      const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       this._toast(errorMessage(err));
     }
@@ -154,7 +171,8 @@ export class ClickerSignalsPage extends LitElement {
       <div class="card-title">Unknown sources</div>
       <div class="meta intro">
         Transmitters heard more than once that match no command: sensors, doorbells, other remotes.
-        Ignore the ones you don't need to see.
+        Ignore the ones you don't need to see. To find out what one is, download it and run
+        <code>rtl_433 -A -r</code> on the file, or paste the file into an AI chat.
       </div>
       ${sources.map((source) => this._renderSource(source, radios.get(source.radio_id)))}
     </div>`;
@@ -170,6 +188,14 @@ export class ClickerSignalsPage extends LitElement {
         <span class="source-label">${source.label}</span>
         <span class="meta">${sourceRhythm(source)} · last ${last}</span>
         <span class="spacer"></span>
+        <button
+          class="icon"
+          aria-label="Download ${source.label} for rtl_433"
+          title="Download for rtl_433 (.ook)"
+          @click=${() => this._download({ source_id: source.id })}
+        >
+          <ha-icon icon="mdi:download"></ha-icon>
+        </button>
         ${naming
           ? nothing
           : html`<button @click=${() => (this._naming = { id: source.id, name: "" })}>Ignore…</button>`}
@@ -238,6 +264,16 @@ export class ClickerSignalsPage extends LitElement {
           : source
             ? html`<span class="chip source ${source.ignored_id ? "ignored" : ""}">${source.label}</span>`
             : html`<span class="chip">${heard.bits ? "No match" : "Noise?"}</span>`}
+        ${this._heard.indexOf(heard) < EXPORTABLE
+          ? html`<button
+              class="icon"
+              aria-label="Download this reception for rtl_433"
+              title="Download for rtl_433 (.ook)"
+              @click=${() => this._download({ heard_id: heard.id })}
+            >
+              <ha-icon icon="mdi:download"></ha-icon>
+            </button>`
+          : html`<span class="icon-space"></span>`}
       </div>
     `;
   }
@@ -322,6 +358,9 @@ export class ClickerSignalsPage extends LitElement {
       .chip.match {
         color: var(--success-color);
         border-color: var(--success-color);
+      }
+      .icon-space {
+        width: 36px;
       }
       .chip.source {
         color: var(--primary-color);

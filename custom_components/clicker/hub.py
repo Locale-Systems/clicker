@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import (
@@ -69,6 +70,7 @@ class Heard:
     matches: tuple[str, ...]  # "Device / Command"
     timings: tuple[int, ...]  # as received, for learning
     source_id: str | None = None  # the unknown source it came from (see core.sources)
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 class _NodeListener:
@@ -157,6 +159,10 @@ class ReceiveHub:
         """Call ``listener`` with every reception (learn sessions, the live view)."""
         self._reception_listeners.append(listener)
         return lambda: self._reception_listeners.remove(listener)
+
+    def heard(self, heard_id: str) -> Heard | None:
+        """Return one of the recent receptions by id, while it is still kept."""
+        return next((h for h in self.recent if h.id == heard_id), None)
 
     def stats(self, now: float | None = None) -> dict[str, dict[str, int]]:
         """Per radio: receptions in the last STATS_WINDOW_S, decoded ones, matched ones.

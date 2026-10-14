@@ -105,6 +105,17 @@ actions:
 
 Every Clicker device has a Home Assistant device, so presses also appear on its device page, with or without entities.
 
+## Identifying unknown signals
+
+Every recent reception and every unknown source on the Live signals tab has a download button. It saves the capture as an [rtl_433](https://github.com/merbanan/rtl_433) pulse file (`.ook`): the source's last three captures as received, plus a cleaned copy when Clicker can decode the signal (Clicker's best reading of the frame, repeated so that every repeat agrees, which many rtl_433 decoders need).
+
+```bash
+rtl_433 -r capture.ook       # try rtl_433's decoders
+rtl_433 -A -r capture.ook    # analyze the modulation and suggest a flex decoder
+```
+
+The file is plain text, so you can also paste it into an AI chat and ask what the signal is likely to be. Treat a decode without a checksum as a guess.
+
 ## Importing from RF Device Manager
 
 Run **Clicker: Import from RF Device Manager**, or use **Import** on the Devices tab. Clicker reads RF Device Manager's stored devices, re-encodes each code and joins each device to the matching Clicker radio: the same transmitter, or else the only radio on that frequency. Devices whose names Clicker already has are skipped, so importing again is safe. RF Device Manager itself is left untouched.

@@ -133,6 +133,13 @@ export const renameRadio = (hass: Hass, radioId: string, name: string) =>
 export const deleteRadio = (hass: Hass, radioId: string) =>
   hass.connection.sendMessagePromise<null>({ type: "clicker/radio/delete", radio_id: radioId });
 
+/** A recent reception, or a source's latest captures, as an rtl_433 pulse file. */
+export const exportCapture = (hass: Hass, target: { heard_id: string } | { source_id: string }) =>
+  hass.connection.sendMessagePromise<{ filename: string; content: string }>({
+    type: "clicker/capture/export",
+    ...target,
+  });
+
 export const ignoreSource = (hass: Hass, sourceId: string, name: string) =>
   hass.connection.sendMessagePromise<{ id: string }>({
     type: "clicker/source/ignore",

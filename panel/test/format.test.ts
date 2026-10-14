@@ -122,7 +122,7 @@ describe("format", () => {
   it("describes what the radios heard", () => {
     const heard = {
       at: 0, radio_id: "r", pulses: 250, bits: "000001111000101100000001", encoding: "pwm",
-      fingerprint: "x", how: "", matches: ["Patio Fan / Power"], source_id: null,
+      fingerprint: "x", how: "", matches: ["Patio Fan / Power"], source_id: null, id: "h",
     };
     expect(heardTitle(heard)).toBe("24-bit …00000001");
     expect(heardTitle({ ...heard, bits: null, pulses: 48 })).toBe("Undecoded (48 pulses)");

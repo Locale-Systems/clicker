@@ -112,6 +112,7 @@ export interface Heard {
   how: string;
   matches: string[];
   source_id: string | null;
+  id: string;
 }
 
 /** An unknown transmitter heard more than once. */

@@ -8,6 +8,8 @@ Reading (any user):
   one as it arrives, with each radio's counts over the last 10 minutes and
   the unknown sources heard more than once (the live signal view).
 - ``clicker/command/send`` sends a stored command (the Test button).
+- ``clicker/capture/export`` returns a recent reception, or an unknown
+  source's latest captures, as an rtl_433 pulse file (:mod:`core.export`).
 
 Changing (admin): ``clicker/device/{create,update,delete}``,
 ``clicker/command/{update,delete}``, ``clicker/radio/{update,delete}`` and
@@ -38,9 +40,11 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .const import DOMAIN, SIGNAL_DATA_UPDATED
-from .core import edit
+from .core import edit, export
 from .core.learn import Candidate, LearnSession
 from .core.models import (
     Capture,
@@ -182,6 +186,7 @@ def _heard(heard: Heard) -> dict[str, Any]:
         "how": heard.how,
         "matches": list(heard.matches),
         "source_id": heard.source_id,
+        "id": heard.id,
     }
 
 
@@ -272,6 +277,56 @@ async def ws_subscribe_receptions(
     connection.subscriptions[msg["id"]] = _unsubscribe
     connection.send_result(msg["id"])
     connection.send_message(_event([_heard(heard) for heard in hub.recent]))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/capture/export",
+        vol.Exclusive("heard_id", "capture"): str,
+        vol.Exclusive("source_id", "capture"): str,
+    }
+)
+@websocket_api.async_response
+@_errors
+async def ws_capture_export(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Return a reception or a source's captures as an rtl_433 pulse (.ook) file."""
+    runtime = _runtime(hass)
+    hub = runtime.hub
+    assert hub is not None
+    if "heard_id" in msg:
+        if (heard := hub.heard(msg["heard_id"])) is None:
+            raise edit.NotFoundError("that reception is no longer kept; only the last 25 are")
+        radio_id, captures = heard.radio_id, [heard.timings]
+        what = (
+            f"{len(heard.bits)}-bit {heard.encoding} code" if heard.bits else "undecoded signal"
+        ) + (f", matched {', '.join(heard.matches)}" if heard.matches else "")
+        name, at = "reception", heard.at
+    elif "source_id" in msg:
+        if (source := hub.sources.get(msg["source_id"])) is None:
+            raise edit.NotFoundError("that source is no longer tracked")
+        radio_id, captures = source.radio_id, list(source.samples)
+        period = source.period_s()
+        what = f"{source.label}: {source.describe()}; heard {source.count} times" + (
+            f", about every {round(period)} s" if period else ""
+        )
+        name, at = source.label, source.last_seen
+    else:
+        raise ModelError("give a heard_id or a source_id")
+    radio = runtime.data.radio(radio_id)
+    frequency_hz = radio.frequency_hz if radio is not None else 0
+    when = dt_util.as_local(dt_util.utc_from_timestamp(at))
+    notes = [
+        f"export of {what}",
+        f"heard {when.isoformat(timespec='seconds')} by "
+        + (f"{radio.name} ({frequency_hz / 1e6:.2f} MHz)" if radio is not None else "a radio"),
+        "decode: rtl_433 -r FILE   analyze the modulation: rtl_433 -A -r FILE",
+    ]
+    content = export.to_ook(export.packets_for(captures), frequency_hz, notes)
+    slug = slugify(name) or "capture"
+    stamp = when.strftime("%Y%m%d-%H%M%S")
+    connection.send_result(
+        msg["id"], {"filename": f"clicker-{slug}-{stamp}.ook", "content": content}
+    )
 
 
 @websocket_api.websocket_command(
@@ -809,6 +864,7 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
         ws_subscribe_data,
         ws_subscribe_receptions,
         ws_source_ignore,
+        ws_capture_export,
         ws_source_unignore,
         ws_send,
         ws_device_create,

@@ -293,6 +293,37 @@ async def test_sources(client: Client, node: FakeNode, hass_storage: dict[str, A
     assert await client.error("clicker/source/unignore", ignored_id="gone") == "not_found"
 
 
+async def test_export(client: Client, node: FakeNode) -> None:
+    """A reception, or a source's latest captures, as an rtl_433 pulse file."""
+    await client.ok("clicker/receptions/subscribe")
+    await client.event()
+    node.client.send(corpus.HELD_CAPTURE)
+    (heard,) = (await client.event())["heard"]
+    for burst in corpus.TX141_BURSTS:
+        node.client.send(burst)
+        event = await client.event()
+    (source,) = event["sources"]
+
+    exported = await client.ok("clicker/capture/export", heard_id=heard["id"])
+    assert exported["filename"].startswith("clicker-reception-")
+    assert exported["filename"].endswith(".ook")
+    content = exported["content"]
+    assert content.count(";end") == 2  # as received, and cleaned
+    assert ";clicker export of 24-bit pwm code, matched Patio fan / Power" in content
+    assert "rtl_433 -A -r FILE" in content and ";freq1 433920000" in content
+
+    exported = await client.ok("clicker/capture/export", source_id=source["id"])
+    assert exported["filename"].startswith("clicker-source_a-")
+    assert exported["content"].count(";end") == 3  # three captures, none decodes
+    assert ";clicker export of Source A: ~" in exported["content"]
+
+    assert await client.error("clicker/capture/export", heard_id="gone") == "not_found"
+    assert await client.error("clicker/capture/export", source_id="gone") == "not_found"
+    assert await client.error("clicker/capture/export") == "invalid_format"
+    both = {"heard_id": heard["id"], "source_id": source["id"]}
+    assert await client.error("clicker/capture/export", **both) == "invalid_format"
+
+
 async def test_learn(
     client: Client, node: FakeNode, transmit: AsyncMock, hass_storage: dict[str, Any]
 ) -> None:

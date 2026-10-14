@@ -26,6 +26,7 @@ jobs:
       - run: python -I tests/test_onoff.py
       - run: python -I tests/test_cover.py
       - run: python -I tests/test_sources.py
+      - run: python -I tests/test_export.py
       - run: python -I tools/report.py
 
   homeassistant:
