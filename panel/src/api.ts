@@ -133,6 +133,16 @@ export const renameRadio = (hass: Hass, radioId: string, name: string) =>
 export const deleteRadio = (hass: Hass, radioId: string) =>
   hass.connection.sendMessagePromise<null>({ type: "clicker/radio/delete", radio_id: radioId });
 
+export const ignoreSource = (hass: Hass, sourceId: string, name: string) =>
+  hass.connection.sendMessagePromise<{ id: string }>({
+    type: "clicker/source/ignore",
+    source_id: sourceId,
+    name,
+  });
+
+export const unignoreSource = (hass: Hass, ignoredId: string) =>
+  hass.connection.sendMessagePromise<null>({ type: "clicker/source/unignore", ignored_id: ignoredId });
+
 export const createDevice = (
   hass: Hass,
   device: { name: string; radio_id: string; area_id?: string | null },

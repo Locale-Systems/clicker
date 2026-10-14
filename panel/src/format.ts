@@ -8,6 +8,7 @@ import type {
   Heard,
   LearnCandidate,
   RadioStats,
+  Source,
 } from "./types";
 
 export function mhz(frequencyHz: number): string {
@@ -149,6 +150,14 @@ export function heardTitle(heard: Heard): string {
   if (!heard.bits) return `Undecoded (${heard.pulses} pulses)`;
   const tail = heard.bits.slice(-8);
   return `${heard.bits.length}-bit ${heard.bits.length > 8 ? "…" : ""}${tail}`;
+}
+
+/** "every ~50 s" / "every ~2 min", or how often it was heard when irregular. */
+export function sourceRhythm(source: Source): string {
+  if (source.period_s === null) return count(source.count, "time");
+  const seconds = Math.round(source.period_s);
+  const every = seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
+  return `every ~${every} · ${count(source.count, "time")}`;
 }
 
 /** "12 heard · 3 matched · 9 undecoded" over the stats window. */

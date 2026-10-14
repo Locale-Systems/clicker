@@ -36,6 +36,7 @@ from .const import DOMAIN, ESPHOME_DOMAIN
 from .core.matcher import Match
 from .core.models import Radio
 from .core.receive import FrameChain, Reception, analyze
+from .core.sources import SourceTracker
 from .devices import ha_device_id
 
 if TYPE_CHECKING:
@@ -67,6 +68,7 @@ class Heard:
     how: str
     matches: tuple[str, ...]  # "Device / Command"
     timings: tuple[int, ...]  # as received, for learning
+    source_id: str | None = None  # the unknown source it came from (see core.sources)
 
 
 class _NodeListener:
@@ -137,6 +139,7 @@ class ReceiveHub:
         self._routes: dict[tuple[str, int, int], str] = {}  # receiver handle -> radio id
         self.recent: deque[Heard] = deque(maxlen=RECENT_RECEPTIONS)
         self._chain = FrameChain()
+        self.sources = SourceTracker()
         # radio id -> (monotonic time, decoded, matched) of each reception in the window
         self._history: dict[str, deque[tuple[float, bool, bool]]] = {}
         self._reception_listeners: list[ReceptionListener] = []
@@ -218,11 +221,17 @@ class ReceiveHub:
             return  # another endpoint on the node, or not linked (yet)
         reception = self._chain.add(handle, analyze(timings[:MAX_ANALYZED_TIMINGS]), at)
         names: list[str] = []
-        for match in self._runtime.matcher.match(reception, radio.frequency_hz, at):
+        matcher = self._runtime.matcher
+        for match in matcher.match(reception, radio.frequency_hz, at):
             if (name := self._fire(match, radio.id, at)) is not None:
                 names.append(name)
+        now = time.time()
+        source = None
+        if not names and not matcher.candidates(reception, radio.frequency_hz):
+            # Not a known command (a held button's repeats are): file it under its source.
+            source = self.sources.observe(radio.id, radio.frequency_hz, reception, timings, now)
         heard = Heard(
-            at=time.time(),
+            at=now,
             radio_id=radio.id,
             pulses=len(timings),
             bits=reception.bits,
@@ -231,6 +240,7 @@ class ReceiveHub:
             how=reception.how,
             matches=tuple(names),
             timings=tuple(timings),
+            source_id=source.id if source is not None else None,
         )
         self.recent.append(heard)
         self._history.setdefault(radio.id, deque()).append((at, reception.decoded, bool(names)))

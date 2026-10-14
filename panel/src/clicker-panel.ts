@@ -136,6 +136,7 @@ export class ClickerPanel extends LitElement {
       return html`<clicker-signals-page
         .hass=${this.hass}
         .radios=${this._data!.radios}
+        .ignored=${this._data!.ignored}
       ></clicker-signals-page>`;
     }
     if (tab === "/radios") {

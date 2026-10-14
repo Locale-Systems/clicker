@@ -225,6 +225,8 @@ async def test_changes_need_admin(
     device_id = data["devices"][0]["id"]
     assert await client.error("clicker/device/delete", device_id=device_id) == "unauthorized"
     assert await client.error("clicker/learn/subscribe", device_id=device_id) == "unauthorized"
+    assert await client.error("clicker/source/ignore", source_id="s") == "unauthorized"
+    assert await client.error("clicker/source/unignore", ignored_id="i") == "unauthorized"
 
 
 async def test_send(client: Client, transmit: AsyncMock) -> None:
@@ -250,6 +252,45 @@ async def test_receptions(client: Client, node: FakeNode) -> None:
     node.client.send(corpus.NOISE)
     stats = (await client.event())["stats"]
     assert stats == {heard["radio_id"]: {"heard": 2, "decoded": 1, "matched": 1}}
+
+
+async def test_sources(client: Client, node: FakeNode, hass_storage: dict[str, Any]) -> None:
+    """Unknown transmitters are grouped into sources, which can be ignored and shown again."""
+    await client.ok("clicker/receptions/subscribe")
+    assert (await client.event())["sources"] == []
+    for burst in corpus.TX141_BURSTS:
+        node.client.send(burst)
+        event = await client.event()
+    (source,) = event["sources"]
+    assert source["label"] == "Source A" and source["count"] == 3 and not source["decoded"]
+    assert event["heard"][0]["source_id"] == source["id"]
+    assert source["description"].startswith("~") and source["ignored_id"] is None
+    # A learned button held down: its repeats aren't a source.
+    node.client.send(corpus.HELD_CAPTURE)
+    node.client.send(corpus.HELD_CAPTURE)
+    second = [await client.event(), await client.event()][1]
+    assert second["heard"][0]["source_id"] is None and len(second["sources"]) == 1
+
+    # Ignoring saves the source (the live view is told), under the given name.
+    await client.ws.send_json_auto_id(
+        {"type": "clicker/source/ignore", "source_id": source["id"], "name": "Weather sensor"}
+    )
+    changed = await client.event()
+    result = await client.ws.receive_json()
+    assert result["success"], result
+    (ignored,) = changed["sources"]
+    assert ignored["label"] == "Weather sensor" and ignored["ignored_id"] == result["result"]["id"]
+    (entry,) = stored(hass_storage).ignored
+    assert entry.name == "Weather sensor" and entry.shape is not None
+    data = await client.ok("clicker/data")
+    assert [i["name"] for i in data["ignored"]] == ["Weather sensor"]
+
+    await client.ws.send_json_auto_id({"type": "clicker/source/unignore", "ignored_id": entry.id})
+    assert (await client.event())["sources"][0]["ignored_id"] is None
+    assert (await client.ws.receive_json())["success"]
+    assert stored(hass_storage).ignored == []
+    assert await client.error("clicker/source/ignore", source_id="gone") == "not_found"
+    assert await client.error("clicker/source/unignore", ignored_id="gone") == "not_found"
 
 
 async def test_learn(

@@ -13,6 +13,7 @@ import {
   radioHints,
   radioLabel,
   radiosFor,
+  sourceRhythm,
   statsLine,
 } from "../src/format";
 import type { ClickerDevice } from "../src/types";
@@ -121,13 +122,23 @@ describe("format", () => {
   it("describes what the radios heard", () => {
     const heard = {
       at: 0, radio_id: "r", pulses: 250, bits: "000001111000101100000001", encoding: "pwm",
-      fingerprint: "x", how: "", matches: ["Patio Fan / Power"],
+      fingerprint: "x", how: "", matches: ["Patio Fan / Power"], source_id: null,
     };
     expect(heardTitle(heard)).toBe("24-bit …00000001");
     expect(heardTitle({ ...heard, bits: null, pulses: 48 })).toBe("Undecoded (48 pulses)");
     expect(statsLine({ heard: 12, decoded: 3, matched: 2 })).toBe("12 heard · 2 matched · 9 undecoded");
     expect(statsLine({ heard: 2, decoded: 2, matched: 2 })).toBe("2 heard · 2 matched");
     expect(statsLine(undefined)).toBe("Nothing heard");
+  });
+
+  it("says how often a source transmits", () => {
+    const source = {
+      id: "s", label: "Source A", radio_id: "r", description: "", decoded: false, count: 12,
+      first_seen: 0, last_seen: 600, period_s: 49.6, ignored_id: null,
+    };
+    expect(sourceRhythm(source)).toBe("every ~50 s · 12 times");
+    expect(sourceRhythm({ ...source, period_s: 300 })).toBe("every ~5 min · 12 times");
+    expect(sourceRhythm({ ...source, period_s: null, count: 2 })).toBe("2 times");
   });
 
   it("gives radio hints, worst first", () => {

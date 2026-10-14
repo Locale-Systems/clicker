@@ -68,9 +68,17 @@ export interface ClickerRadio {
   can_receive: boolean;
 }
 
+export interface IgnoredSource {
+  id: string;
+  name: string;
+  description: string;
+  frequency_hz: number;
+}
+
 export interface ClickerData {
   radios: ClickerRadio[];
   devices: ClickerDevice[];
+  ignored: IgnoredSource[];
   problems: string[];
 }
 
@@ -103,6 +111,21 @@ export interface Heard {
   fingerprint: string | null;
   how: string;
   matches: string[];
+  source_id: string | null;
+}
+
+/** An unknown transmitter heard more than once. */
+export interface Source {
+  id: string;
+  label: string;
+  radio_id: string;
+  description: string;
+  decoded: boolean;
+  count: number;
+  first_seen: number; // seconds since the epoch
+  last_seen: number;
+  period_s: number | null;
+  ignored_id: string | null;
 }
 
 export interface RadioStats {
@@ -115,4 +138,5 @@ export interface ReceptionsUpdate {
   heard: Heard[];
   stats: Record<string, RadioStats>;
   window_s: number;
+  sources: Source[];
 }

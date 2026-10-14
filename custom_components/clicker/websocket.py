@@ -5,15 +5,16 @@ Reading (any user):
 - ``clicker/data`` returns radios, devices and their commands;
   ``clicker/data/subscribe`` sends the same at once and again on every change.
 - ``clicker/receptions/subscribe`` sends the recent receptions, then each new
-  one as it arrives, with each radio's counts over the last 10 minutes (the
-  live signal view).
+  one as it arrives, with each radio's counts over the last 10 minutes and
+  the unknown sources heard more than once (the live signal view).
 - ``clicker/command/send`` sends a stored command (the Test button).
 
 Changing (admin): ``clicker/device/{create,update,delete}``,
 ``clicker/command/{update,delete}``, ``clicker/radio/{update,delete}`` and
 ``clicker/binding/{validate,create,update,delete}`` (entities), with the
 rules in :mod:`core.edit`; ``clicker/import/{status,run}`` imports
-rf_device_manager's data.
+rf_device_manager's data; ``clicker/source/{ignore,unignore}`` hides an
+unknown source from the live view, or shows it again.
 
 Learning (admin): ``clicker/learn/subscribe`` opens a learn session for a
 device and sends its ranked candidates every time a capture changes them;
@@ -54,6 +55,7 @@ from .core.models import (
     new_id,
 )
 from .core.receive import Reception
+from .core.sources import IgnoredSource, Source
 from .hub import STATS_WINDOW_S, Heard
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import describe
@@ -156,6 +158,15 @@ def _data(runtime: ClickerRuntime) -> dict[str, Any]:
     return {
         "radios": [_radio(runtime, r) for r in data.radios],
         "devices": [_device(runtime, d) for d in data.devices],
+        "ignored": [
+            {
+                "id": i.id,
+                "name": i.name,
+                "description": i.description,
+                "frequency_hz": i.frequency_hz,
+            }
+            for i in data.ignored
+        ],
         "problems": data.problems(),
     }
 
@@ -170,6 +181,23 @@ def _heard(heard: Heard) -> dict[str, Any]:
         "fingerprint": heard.fingerprint,
         "how": heard.how,
         "matches": list(heard.matches),
+        "source_id": heard.source_id,
+    }
+
+
+def _source(source: Source, ignored: list[IgnoredSource]) -> dict[str, Any]:
+    entry = source.ignored_by(ignored)
+    return {
+        "id": source.id,
+        "label": entry.name or source.label if entry is not None else source.label,
+        "radio_id": source.radio_id,
+        "description": source.describe(),
+        "decoded": source.bits is not None,
+        "count": source.count,
+        "first_seen": source.first_seen,
+        "last_seen": source.last_seen,
+        "period_s": source.period_s(),
+        "ignored_id": entry.id if entry is not None else None,
     }
 
 
@@ -202,22 +230,84 @@ async def ws_subscribe_data(hass: HomeAssistant, connection: Connection, msg: Me
 async def ws_subscribe_receptions(
     hass: HomeAssistant, connection: Connection, msg: Message
 ) -> None:
-    """Send the recent receptions, then each new one, with per-radio counts."""
-    hub = _runtime(hass).hub
+    """Send the recent receptions, then each new one, with counts and sources.
+
+    Sources are sent once heard twice; they are sent again when the ignored
+    ones change, with no new receptions.
+    """
+    runtime = _runtime(hass)
+    hub = runtime.hub
     assert hub is not None
 
     def _event(heard: list[dict[str, Any]]) -> dict[str, Any]:
+        sources = [_source(s, runtime.data.ignored) for s in hub.sources.sources if s.count >= 2]
         return websocket_api.event_message(
-            msg["id"], {"heard": heard, "stats": hub.stats(), "window_s": STATS_WINDOW_S}
+            msg["id"],
+            {
+                "heard": heard,
+                "stats": hub.stats(),
+                "window_s": STATS_WINDOW_S,
+                "sources": sources,
+            },
         )
 
     @callback
     def _heard_one(heard: Heard, _reception: Reception, _radio: Radio) -> None:
         connection.send_message(_event([_heard(heard)]))
 
-    connection.subscriptions[msg["id"]] = hub.async_add_listener(_heard_one)
+    @callback
+    def _data_changed() -> None:
+        connection.send_message(_event([]))
+
+    unsubscribes = [
+        hub.async_add_listener(_heard_one),
+        async_dispatcher_connect(hass, SIGNAL_DATA_UPDATED, _data_changed),
+    ]
+
+    @callback
+    def _unsubscribe() -> None:
+        for unsubscribe in unsubscribes:
+            unsubscribe()
+
+    connection.subscriptions[msg["id"]] = _unsubscribe
     connection.send_result(msg["id"])
     connection.send_message(_event([_heard(heard) for heard in hub.recent]))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "clicker/source/ignore",
+        vol.Required("source_id"): str,
+        vol.Optional("name", default=""): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_source_ignore(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Hide an unknown source, and anything like it later, from the live view."""
+    runtime = _runtime(hass)
+    assert runtime.hub is not None
+    source = runtime.hub.sources.get(msg["source_id"])
+    if source is None:
+        raise edit.NotFoundError("that source is no longer tracked; wait for it to be heard again")
+    entry = await _change(
+        runtime, lambda: edit.ignore_source(runtime.data, source.ignore_entry(msg["name"]))
+    )
+    connection.send_result(msg["id"], {"id": entry.id})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "clicker/source/unignore", vol.Required("ignored_id"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_errors
+async def ws_source_unignore(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Show an ignored source again."""
+    runtime = _runtime(hass)
+    await _change(runtime, lambda: edit.unignore_source(runtime.data, msg["ignored_id"]))
+    connection.send_result(msg["id"], None)
 
 
 @websocket_api.websocket_command(
@@ -718,6 +808,8 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
         ws_data,
         ws_subscribe_data,
         ws_subscribe_receptions,
+        ws_source_ignore,
+        ws_source_unignore,
         ws_send,
         ws_device_create,
         ws_device_update,

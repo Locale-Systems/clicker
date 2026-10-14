@@ -23,6 +23,7 @@ from typing import Any
 from . import rf_analysis as ra
 from .const import MIN_SIGNAL_PULSES
 from .encoder import ENCODER_VERSION, CodeSpec, encode, roundtrip
+from .sources import IgnoredSource
 
 SCHEMA_VERSION = 1
 DEFAULT_FRAMES_ON_AIR = 8  # about a short button press
@@ -399,10 +400,11 @@ class Radio:
 
 @dataclass
 class ClickerData:
-    """Everything Clicker stores: radios and devices."""
+    """Everything Clicker stores: radios, devices, and the sources the user ignores."""
 
     radios: list[Radio] = field(default_factory=list)
     devices: list[Device] = field(default_factory=list)
+    ignored: list[IgnoredSource] = field(default_factory=list)
 
     def radio(self, radio_id: str) -> Radio | None:
         """Return the radio with this id, if any."""
@@ -433,6 +435,7 @@ class ClickerData:
             "version": SCHEMA_VERSION,
             "radios": [r.to_dict() for r in self.radios],
             "devices": [d.to_dict() for d in self.devices],
+            "ignored": [i.to_dict() for i in self.ignored],
         }
 
     @classmethod
@@ -448,4 +451,5 @@ class ClickerData:
         return cls(
             radios=[Radio.from_dict(r) for r in data.get("radios") or []],
             devices=[Device.from_dict(d) for d in data.get("devices") or []],
+            ignored=[IgnoredSource.from_dict(i) for i in data.get("ignored") or []],
         )

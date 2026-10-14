@@ -32,6 +32,7 @@ from .models import (
     SendPolicy,
 )
 from .onoff import OnOffRemote
+from .sources import IgnoredSource
 
 PLATFORMS = ("fan", "light", "switch", "cover", "button")
 
@@ -228,6 +229,21 @@ def _check_binding_name(device: Device, platform: str, name: str, binding: Bindi
             if other.name.casefold() == name.casefold():
                 raise ModelError(f"{device.name} already has a {platform} named {name!r}")
     return name
+
+
+def ignore_source(data: ClickerData, entry: IgnoredSource) -> IgnoredSource:
+    """Stop showing a source in Live signals; it can be shown again later."""
+    data.ignored.append(entry)
+    return entry
+
+
+def unignore_source(data: ClickerData, ignored_id: str) -> IgnoredSource:
+    """Show an ignored source again."""
+    entry = next((i for i in data.ignored if i.id == ignored_id), None)
+    if entry is None:
+        raise NotFoundError(f"no ignored source {ignored_id!r}")
+    data.ignored.remove(entry)
+    return entry
 
 
 def get_binding(device: Device, binding_id: str) -> Binding:
