@@ -5,7 +5,9 @@ import type {
   ClickerRadio,
   HassArea,
   HassEntityState,
+  Heard,
   LearnCandidate,
+  RadioStats,
 } from "./types";
 
 export function mhz(frequencyHz: number): string {
@@ -140,4 +142,36 @@ export function candidateMeta(candidate: LearnCandidate): string {
   ];
   if (candidate.variants > 1) parts.push(`${candidate.variants} variants`);
   return parts.join(" · ");
+}
+
+/** "24-bit …00000001", "Undecoded (48 pulses)" */
+export function heardTitle(heard: Heard): string {
+  if (!heard.bits) return `Undecoded (${heard.pulses} pulses)`;
+  const tail = heard.bits.slice(-8);
+  return `${heard.bits.length}-bit ${heard.bits.length > 8 ? "…" : ""}${tail}`;
+}
+
+/** "12 heard · 3 matched · 9 undecoded" over the stats window. */
+export function statsLine(stats: RadioStats | undefined): string {
+  if (!stats || !stats.heard) return "Nothing heard";
+  const undecoded = stats.heard - stats.decoded;
+  const parts = [`${stats.heard} heard`, `${stats.matched} matched`];
+  if (undecoded) parts.push(`${undecoded} undecoded`);
+  return parts.join(" · ");
+}
+
+/** Advice for a radio, worst first. */
+export function radioHints(radio: ClickerRadio, devices: number): string[] {
+  const hints: string[] = [];
+  if (!radio.online) {
+    hints.push("Offline. Check that its ESPHome node is on and connected to Home Assistant.");
+  }
+  if (!radio.can_send) {
+    hints.push("Can't send: its node has no RF transmitter on this frequency.");
+  }
+  if (!radio.can_receive) {
+    hints.push("Can't hear remotes: add an RF receiver so remote presses update Home Assistant.");
+  }
+  if (!devices && radio.online && radio.can_send) hints.push("Ready for a device.");
+  return hints;
 }

@@ -119,3 +119,9 @@ export const deleteBinding = (hass: Hass, deviceId: string, bindingId: string) =
     device_id: deviceId,
     binding_id: bindingId,
   });
+
+export const renameRadio = (hass: Hass, radioId: string, name: string) =>
+  hass.connection.sendMessagePromise<unknown>({ type: "clicker/radio/update", radio_id: radioId, name });
+
+export const deleteRadio = (hass: Hass, radioId: string) =>
+  hass.connection.sendMessagePromise<null>({ type: "clicker/radio/delete", radio_id: radioId });

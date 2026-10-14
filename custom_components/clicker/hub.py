@@ -48,6 +48,8 @@ SIGNAL_REMOTE_PRESSED = f"{DOMAIN}_remote_pressed"  # dispatcher: (Match, at, Co
 # A held button can fill the receiver's buffer; the first frames are enough.
 MAX_ANALYZED_TIMINGS = 2000
 RECENT_RECEPTIONS = 25
+# Per-radio counts (heard, decoded, matched) cover this many recent seconds.
+STATS_WINDOW_S = 600
 
 type ReceptionListener = Callable[[Heard, Reception, Radio], None]
 
@@ -134,6 +136,8 @@ class ReceiveHub:
         self._listeners: dict[str, _NodeListener] = {}
         self._routes: dict[tuple[str, int, int], str] = {}  # receiver handle -> radio id
         self.recent: deque[Heard] = deque(maxlen=RECENT_RECEPTIONS)
+        # radio id -> (monotonic time, decoded, matched) of each reception in the window
+        self._history: dict[str, deque[tuple[float, bool, bool]]] = {}
         self._reception_listeners: list[ReceptionListener] = []
         self._unsub_entries = async_dispatcher_connect(
             hass, SIGNAL_CONFIG_ENTRY_CHANGED, self._on_entry_changed
@@ -149,6 +153,24 @@ class ReceiveHub:
         """Call ``listener`` with every reception (learn sessions, the live view)."""
         self._reception_listeners.append(listener)
         return lambda: self._reception_listeners.remove(listener)
+
+    def stats(self, now: float | None = None) -> dict[str, dict[str, int]]:
+        """Per radio: receptions in the last STATS_WINDOW_S, decoded ones, matched ones.
+
+        Many undecoded receptions with few matches is noise: a sensitive
+        receiver, or another transmitter nearby.
+        """
+        now = time.monotonic() if now is None else now
+        counts: dict[str, dict[str, int]] = {}
+        for radio_id, history in self._history.items():
+            while history and history[0][0] < now - STATS_WINDOW_S:
+                history.popleft()
+            counts[radio_id] = {
+                "heard": len(history),
+                "decoded": sum(decoded for _at, decoded, _matched in history),
+                "matched": sum(matched for _at, _decoded, matched in history),
+            }
+        return counts
 
     @property
     def listening(self) -> dict[str, bool]:
@@ -210,6 +232,7 @@ class ReceiveHub:
             timings=tuple(timings),
         )
         self.recent.append(heard)
+        self._history.setdefault(radio.id, deque()).append((at, reception.decoded, bool(names)))
         for listener in list(self._reception_listeners):
             listener(heard, reception, radio)
         _LOGGER.debug(

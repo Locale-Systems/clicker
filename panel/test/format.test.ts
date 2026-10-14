@@ -7,9 +7,12 @@ import {
   describeUsage,
   entitySummary,
   groupByArea,
+  heardTitle,
   mhz,
+  radioHints,
   radioLabel,
   radiosFor,
+  statsLine,
 } from "../src/format";
 import type { ClickerDevice } from "../src/types";
 
@@ -112,5 +115,26 @@ describe("format", () => {
     expect(candidateTitle(raw)).toBe("Raw code");
     expect(candidateMeta(raw)).toBe("Raw replay · seen 1× · 2 variants");
     expect(candidateMeta({ ...raw, usable: false })).toBe("Too short to use · seen 1× · 2 variants");
+  });
+
+  it("describes what the radios heard", () => {
+    const heard = {
+      at: 0, radio_id: "r", pulses: 250, bits: "000001111000101100000001", encoding: "pwm",
+      fingerprint: "x", how: "", matches: ["Patio Fan / Power"],
+    };
+    expect(heardTitle(heard)).toBe("24-bit …00000001");
+    expect(heardTitle({ ...heard, bits: null, pulses: 48 })).toBe("Undecoded (48 pulses)");
+    expect(statsLine({ heard: 12, decoded: 3, matched: 2 })).toBe("12 heard · 2 matched · 9 undecoded");
+    expect(statsLine({ heard: 2, decoded: 2, matched: 2 })).toBe("2 heard · 2 matched");
+    expect(statsLine(undefined)).toBe("Nothing heard");
+  });
+
+  it("gives radio hints, worst first", () => {
+    const radio = { id: "r", name: "R", frequency_hz: 1, online: true, node: "n", can_send: true, can_receive: true };
+    expect(radioHints(radio, 1)).toEqual([]);
+    expect(radioHints(radio, 0)).toEqual(["Ready for a device."]);
+    const offline = radioHints({ ...radio, online: false, can_receive: false }, 1);
+    expect(offline[0]).toMatch(/^Offline/);
+    expect(offline[1]).toMatch(/^Can't hear remotes/);
   });
 });

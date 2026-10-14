@@ -92,3 +92,26 @@ export interface LearnUpdate {
   frequency_hz: number;
   candidates: LearnCandidate[];
 }
+
+export interface Heard {
+  at: number; // seconds since the epoch
+  radio_id: string;
+  pulses: number;
+  bits: string | null;
+  encoding: string | null;
+  fingerprint: string | null;
+  how: string;
+  matches: string[];
+}
+
+export interface RadioStats {
+  heard: number;
+  decoded: number;
+  matched: number;
+}
+
+export interface ReceptionsUpdate {
+  heard: Heard[];
+  stats: Record<string, RadioStats>;
+  window_s: number;
+}

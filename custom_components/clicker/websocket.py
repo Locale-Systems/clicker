@@ -5,7 +5,8 @@ Reading (any user):
 - ``clicker/data`` returns radios, devices and their commands;
   ``clicker/data/subscribe`` sends the same at once and again on every change.
 - ``clicker/receptions/subscribe`` sends the recent receptions, then each new
-  one as it arrives (the live signal view).
+  one as it arrives, with each radio's counts over the last 10 minutes (the
+  live signal view).
 - ``clicker/command/send`` sends a stored command (the Test button).
 
 Changing (admin): ``clicker/device/{create,update,delete}``,
@@ -52,7 +53,7 @@ from .core.models import (
     new_id,
 )
 from .core.receive import Reception
-from .hub import Heard
+from .hub import STATS_WINDOW_S, Heard
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import describe
 
@@ -198,18 +199,22 @@ async def ws_subscribe_data(hass: HomeAssistant, connection: Connection, msg: Me
 async def ws_subscribe_receptions(
     hass: HomeAssistant, connection: Connection, msg: Message
 ) -> None:
-    """Send the recent receptions, then each new one."""
+    """Send the recent receptions, then each new one, with per-radio counts."""
     hub = _runtime(hass).hub
     assert hub is not None
 
+    def _event(heard: list[dict[str, Any]]) -> dict[str, Any]:
+        return websocket_api.event_message(
+            msg["id"], {"heard": heard, "stats": hub.stats(), "window_s": STATS_WINDOW_S}
+        )
+
     @callback
     def _heard_one(heard: Heard, _reception: Reception, _radio: Radio) -> None:
-        connection.send_message(websocket_api.event_message(msg["id"], {"heard": [_heard(heard)]}))
+        connection.send_message(_event([_heard(heard)]))
 
     connection.subscriptions[msg["id"]] = hub.async_add_listener(_heard_one)
     connection.send_result(msg["id"])
-    recent = [_heard(heard) for heard in hub.recent]
-    connection.send_message(websocket_api.event_message(msg["id"], {"heard": recent}))
+    connection.send_message(_event([_heard(heard) for heard in hub.recent]))
 
 
 @websocket_api.websocket_command(

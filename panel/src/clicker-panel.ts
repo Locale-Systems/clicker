@@ -6,8 +6,16 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./device-page";
+import "./radios-page";
+import "./signals-page";
 import { count, entitySummary, groupByArea, radioLabel } from "./format";
 import type { ClickerData, ClickerDevice, ClickerRadio, Hass } from "./types";
+
+const TABS = [
+  { path: "", label: "Devices" },
+  { path: "/signals", label: "Live signals" },
+  { path: "/radios", label: "Radios" },
+];
 
 interface Route {
   prefix: string;
@@ -93,13 +101,46 @@ export class ClickerPanel extends LitElement {
         </div>
       `;
     }
+    const tab = this._tab;
     return html`
       <div class="toolbar">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
         <div class="title">Clicker</div>
       </div>
-      <div class="content">${this._renderBody()}</div>
+      <div class="tabs" role="tablist">
+        ${TABS.map(
+          (t) => html`<button
+            role="tab"
+            class="tab ${t.path === tab ? "active" : ""}"
+            aria-selected=${t.path === tab}
+            @click=${() => this._navigate(t.path)}
+          >
+            ${t.label}
+          </button>`,
+        )}
+      </div>
+      <div class="content">${this._renderTab(tab)}</div>
     `;
+  }
+
+  private get _tab(): string {
+    const path = this.route?.path ?? "";
+    return TABS.find((t) => t.path && path.startsWith(t.path))?.path ?? "";
+  }
+
+  private _renderTab(tab: string) {
+    if (this._error) return html`<p class="notice error">${this._error}</p>`;
+    if (!this._data || !this.hass) return html`<p class="notice">Loading…</p>`;
+    if (tab === "/signals") {
+      return html`<clicker-signals-page
+        .hass=${this.hass}
+        .radios=${this._data.radios}
+      ></clicker-signals-page>`;
+    }
+    if (tab === "/radios") {
+      return html`<clicker-radios-page .hass=${this.hass} .data=${this._data}></clicker-radios-page>`;
+    }
+    return this._renderBody();
   }
 
   private _renderBody() {
@@ -192,6 +233,28 @@ export class ClickerPanel extends LitElement {
     .title {
       margin-left: 12px;
       font-size: 20px;
+    }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 16px;
+      background: var(--app-header-background-color);
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .tab {
+      font: inherit;
+      font-size: 14px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--app-header-text-color, var(--secondary-text-color));
+      opacity: 0.75;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    .tab.active {
+      opacity: 1;
+      border-bottom-color: var(--primary-color);
     }
     .back {
       display: inline-flex;

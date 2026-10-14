@@ -199,10 +199,15 @@ async def test_send(client: Client, transmit: AsyncMock) -> None:
 async def test_receptions(client: Client, node: FakeNode) -> None:
     """Live receptions: the recent ones first, then each as it arrives."""
     await client.ok("clicker/receptions/subscribe")
-    assert (await client.event())["heard"] == []
+    first = await client.event()
+    assert first["heard"] == [] and first["stats"] == {} and first["window_s"] == 600
     node.client.send(corpus.HELD_CAPTURE)
-    (heard,) = (await client.event())["heard"]
+    event = await client.event()
+    (heard,) = event["heard"]
     assert heard["matches"] == ["Patio fan / Power"] and len(heard["bits"]) == 24
+    node.client.send(corpus.NOISE)
+    stats = (await client.event())["stats"]
+    assert stats == {heard["radio_id"]: {"heard": 2, "decoded": 1, "matched": 1}}
 
 
 async def test_learn(
