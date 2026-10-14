@@ -1,6 +1,6 @@
 // Pure helpers for what the panel shows; tested in test/format.test.ts.
 
-import type { ClickerDevice, HassArea, HassEntityState } from "./types";
+import type { ClickerDevice, ClickerRadio, HassArea, HassEntityState } from "./types";
 
 export function mhz(frequencyHz: number): string {
   return `${(frequencyHz / 1e6).toFixed(2)} MHz`;
@@ -65,4 +65,56 @@ export function entitySummary(state: HassEntityState | undefined): string {
 /** "1 command", "6 commands". */
 export function count(n: number, singular: string, plural = `${singular}s`): string {
   return `${n} ${n === 1 ? singular : plural}`;
+}
+
+export const KIND_LABELS: Record<string, string> = {
+  button: "Button",
+  toggle: "Toggle",
+  state: "State",
+};
+
+export const KIND_HINTS: Record<string, string> = {
+  button: "Always sent; no state",
+  toggle: "Flips the state; sent only to change it",
+  state: "Sets one state; safe to resend",
+};
+
+export interface Usage {
+  bindingName: string;
+  platform: string;
+  role: string;
+}
+
+/** Which bindings (entities) use each command, by command id. */
+export function commandUsage(device: ClickerDevice): Map<string, Usage[]> {
+  const usage = new Map<string, Usage[]>();
+  for (const binding of device.bindings) {
+    for (const [role, commandId] of Object.entries(binding.roles)) {
+      const list = usage.get(commandId) ?? [];
+      list.push({ bindingName: binding.name, platform: binding.platform, role });
+      usage.set(commandId, list);
+    }
+  }
+  return usage;
+}
+
+/** "Patio Fan (fan), Scenes (button)" — each entity once. */
+export function describeUsage(usages: Usage[]): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const u of usages) {
+    const label = `${u.bindingName} (${u.platform})`;
+    if (!seen.has(label)) {
+      seen.add(label);
+      parts.push(label);
+    }
+  }
+  return parts.join(", ");
+}
+
+/** Radios a device can use: the ones on its frequency, its own first. */
+export function radiosFor(device: ClickerDevice, radios: ClickerRadio[]): ClickerRadio[] {
+  return radios
+    .filter((r) => r.frequency_hz === device.frequency_hz)
+    .sort((a, b) => (a.id === device.radio_id ? -1 : b.id === device.radio_id ? 1 : a.name.localeCompare(b.name)));
 }

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { count, entitySummary, groupByArea, mhz, radioLabel } from "../src/format";
+import {
+  commandUsage,
+  count,
+  describeUsage,
+  entitySummary,
+  groupByArea,
+  mhz,
+  radioLabel,
+  radiosFor,
+} from "../src/format";
 import type { ClickerDevice } from "../src/types";
 
 const device = (name: string, area_id: string | null): ClickerDevice => ({
@@ -53,5 +62,31 @@ describe("format", () => {
   it("counts", () => {
     expect(count(1, "command")).toBe("1 command");
     expect(count(6, "command")).toBe("6 commands");
+  });
+
+  it("finds which entities use a command", () => {
+    const fan = device("Patio fan", null);
+    fan.bindings = [
+      { id: "b1", platform: "fan", name: "Patio fan", roles: { power: "p", speed_1: "s1" }, entity_ids: [] },
+      { id: "b2", platform: "button", name: "Extras", roles: { press: "p" }, entity_ids: [] },
+    ];
+    const usage = commandUsage(fan);
+    expect(describeUsage(usage.get("p")!)).toBe("Patio fan (fan), Extras (button)");
+    expect(usage.get("s1")!.map((u) => u.role)).toEqual(["speed_1"]);
+    expect(usage.get("other")).toBeUndefined();
+  });
+
+  it("offers radios on the device's frequency, its own first", () => {
+    const radio = (id: string, name: string, frequency_hz: number) => ({
+      id, name, frequency_hz, online: true, node: null, can_send: true, can_receive: true,
+    });
+    const fan = device("Fan", null);
+    fan.radio_id = "own";
+    const choices = radiosFor(fan, [
+      radio("a", "Attic", 433_920_000),
+      radio("own", "Garage", 433_920_000),
+      radio("m", "Minka", 303_870_000),
+    ]);
+    expect(choices.map((r) => r.id)).toEqual(["own", "a"]);
   });
 });

@@ -62,6 +62,11 @@ check(fan.name == "Patio Fan" and fan.radio_id == hall2.id, "rename and move")
 refused(lambda: edit.update_device(data, fan.id, radio_id=shed.id), "move across frequencies")
 refused(lambda: edit.update_device(data, lamp.id, name="patio fan"), "rename onto a taken name")
 check(lamp.name == "Lamp", "a refused rename changed the name")
+fan.bindings = [Binding(platform="fan", name="patio fan"), Binding(platform="light", name="Light")]
+edit.update_device(data, fan.id, name="Porch fan")
+check([b.name for b in fan.bindings] == ["Porch fan", "Light"], "main binding not renamed")
+fan.bindings = []
+edit.update_device(data, fan.id, name="Patio Fan")
 edit.update_device(data, fan.id, clear_area=True)
 check(fan.area_id is None, "area not cleared")
 

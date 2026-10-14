@@ -87,7 +87,11 @@ def update_device(
     clear_area: bool = False,
     radio_id: str | None = None,
 ) -> Device:
-    """Rename a device, set or clear its area, or move it to another radio."""
+    """Rename a device, set or clear its area, or move it to another radio.
+
+    Bindings named after the device are renamed with it, so its main entity
+    keeps showing just the device name.
+    """
     device = get_device(data, device_id)
     new_name = _check_device_name(data, name, device) if name is not None else device.name
     radio = get_radio(data, radio_id) if radio_id is not None else None
@@ -96,6 +100,10 @@ def update_device(
             f"{device.name} is on {device.frequency_hz} Hz; radio {radio.name!r} is on "
             f"{radio.frequency_hz} Hz"
         )
+    for binding in device.bindings:
+        # A binding named like its device is the device's main entity: keep it so.
+        if binding.name.casefold() == device.name.casefold():
+            binding.name = new_name
     device.name = new_name
     if clear_area:
         device.area_id = None

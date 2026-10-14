@@ -5,8 +5,14 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import "./device-page";
 import { count, entitySummary, groupByArea, radioLabel } from "./format";
 import type { ClickerData, ClickerDevice, ClickerRadio, Hass } from "./types";
+
+interface Route {
+  prefix: string;
+  path: string;
+}
 
 const PLATFORM_ICONS: Record<string, string> = {
   fan: "mdi:fan",
@@ -19,6 +25,7 @@ const PLATFORM_ICONS: Record<string, string> = {
 export class ClickerPanel extends LitElement {
   @property({ attribute: false }) hass?: Hass;
   @property({ type: Boolean }) narrow = false;
+  @property({ attribute: false }) route?: Route;
 
   @state() private _data?: ClickerData;
   @state() private _error?: string;
@@ -54,7 +61,38 @@ export class ClickerPanel extends LitElement {
     });
   }
 
+  /** Go to a path inside the panel, the way Home Assistant navigates. */
+  private _navigate(path: string): void {
+    history.pushState(null, "", `${this.route?.prefix ?? "/clicker"}${path}`);
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  }
+
+  private get _deviceId(): string | undefined {
+    return /^\/device\/([^/]+)/.exec(this.route?.path ?? "")?.[1];
+  }
+
   render() {
+    const deviceId = this._deviceId;
+    const device = deviceId ? this._data?.devices.find((d) => d.id === deviceId) : undefined;
+    if (deviceId && this._data && this.hass) {
+      return html`
+        <div class="toolbar">
+          <button class="back" aria-label="Back to devices" @click=${() => this._navigate("")}>
+            <ha-icon icon="mdi:arrow-left"></ha-icon>
+          </button>
+          <div class="title">${device?.name ?? "Device not found"}</div>
+        </div>
+        <div class="content">
+          ${device
+            ? html`<clicker-device-page
+                .hass=${this.hass}
+                .device=${device}
+                .radios=${this._data.radios}
+              ></clicker-device-page>`
+            : html`<p class="notice">This device was deleted.</p>`}
+        </div>
+      `;
+    }
     return html`
       <div class="toolbar">
         <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
@@ -98,7 +136,13 @@ export class ClickerPanel extends LitElement {
       (b.entity_ids.length ? b.entity_ids : [undefined]).map((entityId) => ({ binding: b, entityId })),
     );
     return html`
-      <div class="card">
+      <div
+        class="card clickable"
+        role="button"
+        tabindex="0"
+        @click=${() => this._navigate(`/device/${device.id}`)}
+        @keydown=${(e: KeyboardEvent) => e.key === "Enter" && this._navigate(`/device/${device.id}`)}
+      >
         <div class="card-head">
           <span class="name">${device.name}</span>
           ${radio?.online
@@ -148,6 +192,22 @@ export class ClickerPanel extends LitElement {
     .title {
       margin-left: 12px;
       font-size: 20px;
+    }
+    .back {
+      display: inline-flex;
+      background: none;
+      border: none;
+      color: inherit;
+      padding: 8px;
+      cursor: pointer;
+    }
+    .clickable {
+      cursor: pointer;
+    }
+    .clickable:hover,
+    .clickable:focus-visible {
+      border-color: var(--primary-color);
+      outline: none;
     }
     .content {
       max-width: 1040px;
