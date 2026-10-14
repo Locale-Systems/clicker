@@ -3,16 +3,17 @@
 // The subscription runs only while this page is shown.
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { errorMessage } from "./api";
+import { define } from "./define";
 import { heardTitle, radioLabel, statsLine } from "./format";
 import { shared } from "./styles";
 import type { ClickerRadio, Hass, Heard, RadioStats, ReceptionsUpdate } from "./types";
 
 const KEEP = 200;
 
-@customElement("clicker-signals-page")
+@define("clicker-signals-page")
 export class ClickerSignalsPage extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) radios: ClickerRadio[] = [];

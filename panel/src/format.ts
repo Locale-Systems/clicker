@@ -180,6 +180,7 @@ export const PLATFORM_ICONS: Record<string, string> = {
   fan: "mdi:fan",
   light: "mdi:lightbulb",
   switch: "mdi:toggle-switch-variant",
+  cover: "mdi:window-shutter",
   button: "mdi:gesture-tap-button",
 };
 

@@ -33,6 +33,7 @@ ATTR_FRAMES_ON_AIR = "frames_on_air"
 SET_ASSUMED_STATE_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Optional("is_on"): cv.boolean,
+        vol.Optional("is_closed"): cv.boolean,
         vol.Optional("percentage"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         vol.Optional("oscillating"): cv.boolean,
         vol.Optional("direction"): vol.In(["forward", "reverse"]),

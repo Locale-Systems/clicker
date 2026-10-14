@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buttonRole,
   detectTemplate,
+  guessCoverType,
   slotsFor,
   speedCount,
   suggestRoles,
@@ -40,11 +41,24 @@ describe("templates", () => {
   });
 
   it("recognizes existing bindings", () => {
-    const fan = { id: "b", platform: "fan", name: "F", entity_ids: [], roles: { power: "a", speed_1: "b", speed_2: "c" } };
+    const fan = { id: "b", platform: "fan", name: "F", entity_ids: [], options: {}, roles: { power: "a", speed_1: "b", speed_2: "c" } };
     expect(detectTemplate(fan)).toMatchObject({ template: { id: "fan_toggle" }, speeds: 2 });
     const light = { ...fan, platform: "light", roles: { on: "a", off: "b" } };
     expect(detectTemplate(light).template.id).toBe("light_onoff");
     expect(detectTemplate({ ...fan, platform: "switch", roles: { toggle: "a" } }).template.id).toBe("switch_toggle");
+  });
+
+  it("suggests the patio awning's commands and type", () => {
+    const awning = ["Open", "Close", "Stop"].map((n, i) => command(`a${i}`, n));
+    expect(suggestRoles(slotsFor(templateById("cover"), 0), awning)).toEqual({
+      open: "a0", close: "a1", stop: "a2",
+    });
+    const cover = { id: "b", platform: "cover", name: "A", entity_ids: [], options: {}, roles: { open: "a", close: "b" } };
+    expect(detectTemplate(cover).template.id).toBe("cover");
+    expect(guessCoverType("Patio Awning")).toBe("awning");
+    expect(guessCoverType("Garage Door")).toBe("garage");
+    expect(guessCoverType("Front door")).toBe("door");
+    expect(guessCoverType("Patio Fan")).toBe("");
   });
 
   it("makes stable button roles", () => {

@@ -12,7 +12,7 @@ export interface RoleSlot {
 
 export interface Template {
   id: string;
-  platform: "fan" | "light" | "switch" | "button";
+  platform: "fan" | "light" | "switch" | "cover" | "button";
   label: string;
   hasSpeeds?: boolean;
   /** Buttons: pick any commands instead of filling slots. */
@@ -73,8 +73,37 @@ export const TEMPLATES: Template[] = [
       { role: "off", label: "Off", required: true },
     ],
   },
+  {
+    id: "cover",
+    platform: "cover",
+    label: "Cover (awning, shade, door…)",
+    slots: [
+      { role: "open", label: "Open", required: true },
+      { role: "close", label: "Close", required: true },
+      { role: "stop", label: "Stop", required: false },
+    ],
+  },
   { id: "buttons", platform: "button", label: "Buttons", pickCommands: true, slots: [] },
 ];
+
+/** Home Assistant's cover device classes, as the cover's type. */
+export const COVER_TYPES: { value: string; label: string; pattern: RegExp }[] = [
+  { value: "awning", label: "Awning", pattern: /awning|canopy|pergola/i },
+  { value: "blind", label: "Blind", pattern: /blind/i },
+  { value: "curtain", label: "Curtain", pattern: /curtain|drape/i },
+  { value: "damper", label: "Damper", pattern: /damper/i },
+  { value: "door", label: "Door", pattern: /^(?!.*garage).*\bdoor/i },
+  { value: "garage", label: "Garage door", pattern: /garage/i },
+  { value: "gate", label: "Gate", pattern: /gate/i },
+  { value: "shade", label: "Shade", pattern: /shade|screen/i },
+  { value: "shutter", label: "Shutter", pattern: /shutter/i },
+  { value: "window", label: "Window", pattern: /window/i },
+];
+
+/** Guess a cover's type from its device's name ("" when nothing fits). */
+export function guessCoverType(deviceName: string): string {
+  return COVER_TYPES.find((t) => t.pattern.test(deviceName))?.value ?? "";
+}
 
 export const templateById = (id: string) => TEMPLATES.find((t) => t.id === id)!;
 
@@ -100,6 +129,9 @@ const PATTERNS: Record<string, RegExp> = {
   toggle: /light|lamp|toggle|power/i,
   oscillate: /oscillat|swing/i,
   direction: /reverse|direction/i,
+  open: /^(open|up|extend|raise)$/i,
+  close: /^(close|down|retract|lower)$/i,
+  stop: /^(stop|pause|my)$/i,
 };
 
 /** Guess a command for each slot from command names; unmatched slots stay empty. */
@@ -127,7 +159,9 @@ export function detectTemplate(binding: ClickerBinding): { template: Template; s
       ? roles.includes("power") ? "fan_toggle" : "fan_off"
       : binding.platform === "button"
         ? "buttons"
-        : `${binding.platform}_${roles.includes("on") && roles.includes("off") ? "onoff" : "toggle"}`;
+        : binding.platform === "cover"
+          ? "cover"
+          : `${binding.platform}_${roles.includes("on") && roles.includes("off") ? "onoff" : "toggle"}`;
   return { template: templateById(id), speeds };
 }
 

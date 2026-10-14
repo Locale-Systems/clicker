@@ -120,8 +120,9 @@ refused(
     lambda: edit.add_binding(data, fan.id, "light", "Lamp", {"on": power.id}), "light with on only"
 )
 refused(
-    lambda: edit.add_binding(data, fan.id, "cover", "Shade", {"open": power.id}), "unknown platform"
+    lambda: edit.add_binding(data, fan.id, "vacuum", "Robot", {"go": power.id}), "unknown platform"
 )
+refused(lambda: edit.add_binding(data, fan.id, "cover", "Shade", {"open": power.id}), "no close")
 refused(lambda: edit.add_binding(data, fan.id, "button", "B", {"press": "nope"}), "missing command")
 refused(lambda: edit.add_binding(data, fan.id, "button", "B", {}), "no roles")
 refused(lambda: edit.add_binding(data, fan.id, "fan", "patio fan", {"power": power.id}), "dup name")
@@ -133,6 +134,35 @@ refused(lambda: edit.update_binding(data, fan.id, fan_entity.id, roles={}), "upd
 check(fan_entity.roles == {"power": power.id}, "a refused update changed the roles")
 edit.delete_binding(data, fan.id, light.id)
 check(light not in fan.bindings and osc in fan.commands, "deleting a binding keeps its commands")
+
+# Covers: options hold the type; other platforms have no options.
+shade_roles = {"open": power.id, "close": osc.id}
+shade = edit.add_binding(data, fan.id, "cover", "Shade", shade_roles, {"device_class": "awning"})
+check(shade.options == {"device_class": "awning"}, "cover options not kept")
+check(Binding.from_dict(shade.to_dict()) == shade, "cover options not stored")
+check("options" not in fan_entity.to_dict(), "empty options should not be stored")
+refused(
+    lambda: edit.add_binding(data, fan.id, "cover", "Door", shade_roles, {"device_class": "boat"}),
+    "unknown device class",
+)
+refused(
+    lambda: edit.add_binding(data, fan.id, "cover", "Door", shade_roles, {"speed": "fast"}),
+    "unknown cover option",
+)
+refused(
+    lambda: edit.add_binding(data, fan.id, "light", "L", {"toggle": osc.id}, {"device_class": "x"}),
+    "light with options",
+)
+edit.update_binding(data, fan.id, shade.id, options={"device_class": "shade"})
+check(shade.options == {"device_class": "shade"} and shade.roles == shade_roles, "update options")
+refused(
+    lambda: edit.update_binding(data, fan.id, shade.id, options={"device_class": "boat"}),
+    "update to an unknown device class",
+)
+check(shade.options == {"device_class": "shade"}, "a refused update changed the options")
+edit.update_binding(data, fan.id, shade.id, name="Awning")
+check(shade.name == "Awning" and shade.options == {"device_class": "shade"}, "rename kept options")
+edit.delete_binding(data, fan.id, shade.id)
 edit.delete_binding(data, fan.id, fan_entity.id)
 edit.delete_command(data, fan.id, osc.id)
 

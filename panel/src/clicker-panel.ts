@@ -6,9 +6,10 @@
 //   /device/<id>[/learn] one device (optionally starting a learn session)
 
 import { LitElement, css, html } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { errorMessage } from "./api";
+import { define } from "./define";
 import "./device-page";
 import "./devices-page";
 import "./radios-page";
@@ -26,7 +27,7 @@ interface Route {
   path: string;
 }
 
-@customElement("clicker-panel")
+@define("clicker-panel")
 export class ClickerPanel extends LitElement {
   @property({ attribute: false }) hass?: Hass;
   @property({ type: Boolean }) narrow = false;

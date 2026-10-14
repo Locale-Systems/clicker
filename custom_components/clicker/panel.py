@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
-from homeassistant.loader import async_get_integration
 
 from .const import DOMAIN
 
@@ -30,7 +30,9 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
             [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
         )
         hass.data[_STATIC_REGISTERED] = True
-    version = (await async_get_integration(hass, DOMAIN)).version
+    # Versioned by content, so browsers fetch a rebuilt panel even when the
+    # integration's version is unchanged (they cache the module by its URL).
+    version = await hass.async_add_executor_job(_build_hash)
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=PANEL_URL_PATH,
@@ -42,6 +44,10 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
         config={},
     )
     return True
+
+
+def _build_hash() -> str:
+    return hashlib.sha1((FRONTEND_DIR / f"{PANEL_ELEMENT}.js").read_bytes()).hexdigest()[:12]
 
 
 def async_remove_panel(hass: HomeAssistant) -> None:

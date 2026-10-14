@@ -24,6 +24,7 @@ jobs:
       - run: python -I tests/test_edit.py
       - run: python -I tests/test_fan.py
       - run: python -I tests/test_onoff.py
+      - run: python -I tests/test_cover.py
       - run: python -I tools/report.py
 
   homeassistant:

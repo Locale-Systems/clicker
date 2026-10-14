@@ -2,14 +2,15 @@
 // how much it hears, advice, rename, and delete (only when no device uses it).
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { deleteRadio, errorMessage, renameRadio } from "./api";
+import { define } from "./define";
 import { count, mhz, radioHints } from "./format";
 import { shared } from "./styles";
 import type { ClickerData, ClickerRadio, Hass } from "./types";
 
-@customElement("clicker-radios-page")
+@define("clicker-radios-page")
 export class ClickerRadiosPage extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) data!: ClickerData;

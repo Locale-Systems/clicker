@@ -261,21 +261,26 @@ class Binding:
     ``roles`` maps a platform role to a command id, e.g. for a fan
     ``{"power": ..., "speed_1": ..., "speed_2": ..., "oscillate": ...}``.
     Which roles a platform accepts is checked by the entity layer.
+    ``options`` holds platform settings, e.g. a cover's ``device_class``.
     """
 
     platform: str
     name: str
     roles: dict[str, str] = field(default_factory=dict)
     id: str = field(default_factory=new_id)
+    options: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-safe values."""
-        return {
+        data: dict[str, Any] = {
             "id": self.id,
             "platform": self.platform,
             "name": self.name,
             "roles": dict(self.roles),
         }
+        if self.options:
+            data["options"] = dict(self.options)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Binding:
@@ -285,6 +290,7 @@ class Binding:
             platform=str(_require(data, "platform", "binding")),
             name=str(_require(data, "name", "binding")),
             roles={str(k): str(v) for k, v in (data.get("roles") or {}).items()},
+            options={str(k): str(v) for k, v in (data.get("options") or {}).items()},
         )
 
 

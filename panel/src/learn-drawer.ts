@@ -4,9 +4,10 @@
 // existing one.
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { errorMessage, learnSave, learnTest } from "./api";
+import { define } from "./define";
 import { KIND_HINTS, KIND_LABELS, candidateMeta, candidateTitle, mhz } from "./format";
 import { shared } from "./styles";
 import type { ClickerDevice, Hass, LearnCandidate, LearnUpdate } from "./types";
@@ -19,7 +20,7 @@ interface SaveDraft {
   commandId: string;
 }
 
-@customElement("clicker-learn-drawer")
+@define("clicker-learn-drawer")
 export class ClickerLearnDrawer extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) device!: ClickerDevice;

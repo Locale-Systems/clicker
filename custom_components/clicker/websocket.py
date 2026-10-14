@@ -130,6 +130,7 @@ def _device(runtime: ClickerRuntime, device: Device) -> dict[str, Any]:
                 "platform": b.platform,
                 "name": b.name,
                 "roles": b.roles,
+                "options": b.options,
                 "entity_ids": sorted(entities.get(b.id, [])),
             }
             for b in device.bindings
@@ -400,6 +401,7 @@ async def ws_radio_delete(hass: HomeAssistant, connection: Connection, msg: Mess
 
 
 ROLES = vol.Schema({str: str})
+OPTIONS = vol.Schema({str: str})
 
 
 @websocket_api.websocket_command(
@@ -408,16 +410,17 @@ ROLES = vol.Schema({str: str})
         vol.Required("device_id"): str,
         vol.Required("platform"): str,
         vol.Required("roles"): ROLES,
+        vol.Optional("options"): OPTIONS,
     }
 )
 @websocket_api.require_admin
 @websocket_api.async_response
 @_errors
 async def ws_binding_validate(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
-    """Say whether these roles would make a working entity, and if not, why."""
+    """Say whether these roles and options would make a working entity, and if not, why."""
     device = edit.get_device(_runtime(hass).data, msg["device_id"])
     try:
-        edit.check_binding(device, msg["platform"], msg["roles"])
+        edit.check_binding(device, msg["platform"], msg["roles"], msg.get("options"))
     except ModelError as err:
         connection.send_result(msg["id"], {"ok": False, "error": str(err)})
         return
@@ -431,6 +434,7 @@ async def ws_binding_validate(hass: HomeAssistant, connection: Connection, msg: 
         vol.Required("platform"): str,
         vol.Required("name"): str,
         vol.Required("roles"): ROLES,
+        vol.Optional("options"): OPTIONS,
     }
 )
 @websocket_api.require_admin
@@ -442,7 +446,12 @@ async def ws_binding_create(hass: HomeAssistant, connection: Connection, msg: Me
     binding = await _change(
         runtime,
         lambda: edit.add_binding(
-            runtime.data, msg["device_id"], msg["platform"], msg["name"], msg["roles"]
+            runtime.data,
+            msg["device_id"],
+            msg["platform"],
+            msg["name"],
+            msg["roles"],
+            msg.get("options"),
         ),
     )
     connection.send_result(msg["id"], {"id": binding.id})
@@ -455,6 +464,7 @@ async def ws_binding_create(hass: HomeAssistant, connection: Connection, msg: Me
         vol.Required("binding_id"): str,
         vol.Optional("name"): str,
         vol.Optional("roles"): ROLES,
+        vol.Optional("options"): OPTIONS,
     }
 )
 @websocket_api.require_admin
@@ -471,6 +481,7 @@ async def ws_binding_update(hass: HomeAssistant, connection: Connection, msg: Me
             msg["binding_id"],
             name=msg.get("name"),
             roles=msg.get("roles"),
+            options=msg.get("options"),
         ),
     )
     connection.send_result(msg["id"], {"id": binding.id})

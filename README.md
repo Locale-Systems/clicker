@@ -17,7 +17,7 @@ A Home Assistant integration for learning, controlling and tracking sub-GHz RF r
 | Path | What |
 | --- | --- |
 | `custom_components/clicker/core/` | Pure-Python core with no Home Assistant imports: normalization, decoders, encoder and round-trip checks, the data model (`models.py`), the stream builder (`stream.py`), the shared receive analysis (`receive.py`), the matcher (`matcher.py`), learn-candidate grouping (`learn.py`), the editing rules (`edit.py`), fan and on/off remote rules (`fan.py`, `onoff.py`) and the rf_device_manager importer (`importer.py`) |
-| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the receive hub (`hub.py`), the send queue (`sender.py`), actions (`services.py`), the panel's websocket API (`websocket.py`), entities (`entity.py`, `fan.py`, `light.py`, `switch.py`, `button.py`) and diagnostics |
+| `custom_components/clicker/` | The Home Assistant integration: setup, config flow, radio discovery (`discovery.py`), storage (`storage.py`), the receive hub (`hub.py`), the send queue (`sender.py`), actions (`services.py`), the panel's websocket API (`websocket.py`), entities (`entity.py`, `fan.py`, `light.py`, `switch.py`, `cover.py`, `button.py`) and diagnostics |
 | `tests/` | One suite per core module, plus the capture corpus |
 | `tests/ha/` | Home Assistant tests (pytest-homeassistant-custom-component) |
 | `panel/` | The sidebar panel (Lit + TypeScript); its build is committed to `custom_components/clicker/frontend/` |
@@ -68,7 +68,7 @@ Python 3.14 or later, matching Home Assistant's own minimum. The core uses only 
 
 Clicker adds a **Clicker** entry to the sidebar for admins, with three tabs:
 
-- **Devices**: your devices by area. Add a device (it opens straight into learning) or import from RF Device Manager. A device's page lists its commands (test, rename, change kind or frames on air, delete), learns new ones from the remote (live candidates you can test, then save or use to relearn an existing command), and builds entities from templates: fans with a power toggle or an Off button, lights and switches with a toggle or On and Off buttons, and buttons.
+- **Devices**: your devices by area. Add a device (it opens straight into learning) or import from RF Device Manager. A device's page lists its commands (test, rename, change kind or frames on air, delete), learns new ones from the remote (live candidates you can test, then save or use to relearn an existing command), and builds entities from templates: fans with a power toggle or an Off button, lights and switches with a toggle or On and Off buttons, covers with Open, Close and an optional Stop (and a kind: awning, shade, garage door, ...), and buttons.
 - **Live signals**: everything the radios hear, with what it decoded to and which command it matched, and each radio's counts over the last 10 minutes.
 - **Radios**: each radio's state, what it can do, and advice; rename, or delete one no device uses.
 
@@ -83,15 +83,21 @@ A binding with platform `fan` becomes a fan entity, built from the roles it has,
 | Oscillation | `oscillate` | `oscillate_on`, `oscillate_off` |
 | Direction | `direction` (reverse) | `direction_forward`, `direction_reverse` |
 
-Toggles are sent only when the state has to change. On a power-toggle fan, a speed from off sends power first; on an explicit-power fan, the speed buttons switch it on. Remote presses move the assumed state the same way, with the context of their `clicker_remote_pressed` event. ### Lights and switches
+Toggles are sent only when the state has to change. On a power-toggle fan, a speed from off sends power first; on an explicit-power fan, the speed buttons switch it on. Remote presses move the assumed state the same way, with the context of their `clicker_remote_pressed` event.
+
+### Lights and switches
 
 A binding with platform `light` becomes an on/off light, and one with platform `switch` a switch: power is a `toggle` (or `power`) button, or `on` and `off` buttons. As with fans, a toggle is sent only when the light has to change, explicit buttons are always sent, and remote presses move the state. A fan remote's light button is a light binding on the same device. Brightness steps can't set an absolute brightness, so they're buttons.
+
+### Covers
+
+A binding with platform `cover` becomes a cover: `open` and `close` buttons, and optionally `stop`. Its `device_class` option (awning, blind, curtain, damper, door, garage, gate, shade, shutter or window) sets the icon and how voice assistants refer to it. Clicker knows a cover only as open or closed, not its position: Open and Close are always sent and set the state at once, Stop leaves it as it was, and remote presses move it the same way.
 
 ### Buttons
 
 Every command of a binding with platform `button` becomes a button entity named after the command; pressing it sends that command. Buttons have no state to follow.
 
-If a press is missed and a device and Home Assistant disagree, **Clicker: Set assumed state** (`clicker.set_assumed_state`) corrects any Clicker fan or light without sending anything; each takes the fields it has.
+If a press is missed and a device and Home Assistant disagree, **Clicker: Set assumed state** (`clicker.set_assumed_state`) corrects any Clicker fan, light, switch or cover without sending anything; each takes the fields it has.
 
 ### Sending
 
@@ -99,7 +105,7 @@ If a press is missed and a device and Home Assistant disagree, **Clicker: Set as
 
 ### Remote presses
 
-Clicker listens to every receiver it has linked. A press that matches a stored command fires `clicker_remote_pressed` with `device` and `command` (names), `kind`, `device_id` (the Home Assistant device), `clicker_device_id`, `command_id`, `radio_id` and `distance` (0 for an identical code), and shows in the logbook as, for example, "Patio Fan: Power pressed on the remote". Every Clicker device has a Home Assistant device, with or without entities. Holding a button counts once. The last 25 receptions, matched or not, are in the diagnostics; set `custom_components.clicker` to debug logging to see each one as it arrives.
+Clicker listens to every receiver it has linked. A press that matches a stored command fires `clicker_remote_pressed` with `device` and `command` (names), `kind`, `device_id` (the Home Assistant device), `clicker_device_id`, `command_id`, `radio_id` and `distance` (0 for an identical code), and shows in the logbook as, for example, "Patio Fan: Power pressed on the remote". Every Clicker device has a Home Assistant device, with or without entities. Holding a button counts once. Some remotes (Dooya-style motor remotes, for one) pause so long between frames that each frame arrives as its own reception; identical frames from one receiver within 250 ms are counted together, as if they had arrived at once. The last 25 receptions, matched or not, are in the diagnostics; set `custom_components.clicker` to debug logging to see each one as it arrives.
 
 ### Importing from rf_device_manager
 

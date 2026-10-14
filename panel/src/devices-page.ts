@@ -2,9 +2,10 @@
 // adding a device; importing from RF Device Manager.
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { createDevice, errorMessage, importRun, importStatus } from "./api";
+import { define } from "./define";
 import {
   PLATFORM_ICONS,
   count,
@@ -22,7 +23,7 @@ interface NewDevice {
   area: string;
 }
 
-@customElement("clicker-devices-page")
+@define("clicker-devices-page")
 export class ClickerDevicesPage extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) data!: ClickerData;

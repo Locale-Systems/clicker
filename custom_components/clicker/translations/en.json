@@ -35,11 +35,15 @@
     },
     "set_assumed_state": {
       "name": "Set assumed state",
-      "description": "Corrects what Home Assistant assumes a Clicker fan or light is doing, without sending anything. Use it when a device and Home Assistant disagree, for example after a remote press was missed.",
+      "description": "Corrects what Home Assistant assumes a Clicker fan, light, switch or cover is doing, without sending anything. Use it when a device and Home Assistant disagree, for example after a remote press was missed.",
       "fields": {
         "is_on": {
           "name": "On",
           "description": "Whether the device is on."
+        },
+        "is_closed": {
+          "name": "Closed",
+          "description": "Whether the cover is closed."
         },
         "percentage": {
           "name": "Speed",

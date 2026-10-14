@@ -81,18 +81,25 @@ export const validateBinding = (
   deviceId: string,
   platform: string,
   roles: Record<string, string>,
+  options: Record<string, string> = {},
 ) =>
   hass.connection.sendMessagePromise<{ ok: boolean; error: string | null }>({
     type: "clicker/binding/validate",
     device_id: deviceId,
     platform,
     roles,
+    options,
   });
 
 export const createBinding = (
   hass: Hass,
   deviceId: string,
-  binding: { platform: string; name: string; roles: Record<string, string> },
+  binding: {
+    platform: string;
+    name: string;
+    roles: Record<string, string>;
+    options?: Record<string, string>;
+  },
 ) =>
   hass.connection.sendMessagePromise<{ id: string }>({
     type: "clicker/binding/create",
@@ -104,7 +111,7 @@ export const updateBinding = (
   hass: Hass,
   deviceId: string,
   bindingId: string,
-  changes: { name?: string; roles?: Record<string, string> },
+  changes: { name?: string; roles?: Record<string, string>; options?: Record<string, string> },
 ) =>
   hass.connection.sendMessagePromise<{ id: string }>({
     type: "clicker/binding/update",

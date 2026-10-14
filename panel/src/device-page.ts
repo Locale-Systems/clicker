@@ -3,7 +3,7 @@
 // the updated device back, so this view keeps no copy of its own.
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import {
   deleteBinding,
@@ -14,6 +14,7 @@ import {
   updateCommand,
   updateDevice,
 } from "./api";
+import { define } from "./define";
 import "./entity-editor";
 import "./learn-drawer";
 import {
@@ -40,7 +41,7 @@ interface CommandDraft {
   frames: number;
 }
 
-@customElement("clicker-device-page")
+@define("clicker-device-page")
 export class ClickerDevicePage extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) device!: ClickerDevice;

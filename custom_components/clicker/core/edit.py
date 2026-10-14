@@ -18,6 +18,8 @@ without changing anything. The rules:
 
 from __future__ import annotations
 
+from . import cover
+from .cover import CoverRemote
 from .fan import FanRemote
 from .models import (
     Binding,
@@ -31,7 +33,7 @@ from .models import (
 )
 from .onoff import OnOffRemote
 
-PLATFORMS = ("fan", "light", "switch", "button")
+PLATFORMS = ("fan", "light", "switch", "cover", "button")
 
 
 class NotFoundError(ModelError):
@@ -194,8 +196,10 @@ def delete_radio(data: ClickerData, radio_id: str) -> Radio:
     return radio
 
 
-def check_binding(device: Device, platform: str, roles: dict[str, str]) -> None:
-    """Raise ``ModelError`` unless these roles make a working entity of ``platform``."""
+def check_binding(
+    device: Device, platform: str, roles: dict[str, str], options: dict[str, str] | None = None
+) -> None:
+    """Raise ``ModelError`` unless these roles and options make a working ``platform`` entity."""
     if platform not in PLATFORMS:
         raise ModelError(f"unknown entity type {platform!r}; use one of {', '.join(PLATFORMS)}")
     if not roles:
@@ -209,6 +213,12 @@ def check_binding(device: Device, platform: str, roles: dict[str, str]) -> None:
         FanRemote(roles)
     elif platform in ("light", "switch"):
         OnOffRemote(roles)
+    elif platform == "cover":
+        CoverRemote(roles)
+    if platform == "cover":
+        cover.check_options(options or {})
+    elif options:
+        raise ModelError(f"a {platform} has no options")
 
 
 def _check_binding_name(device: Device, platform: str, name: str, binding: Binding | None) -> str:
@@ -228,15 +238,21 @@ def get_binding(device: Device, binding_id: str) -> Binding:
 
 
 def add_binding(
-    data: ClickerData, device_id: str, platform: str, name: str, roles: dict[str, str]
+    data: ClickerData,
+    device_id: str,
+    platform: str,
+    name: str,
+    roles: dict[str, str],
+    options: dict[str, str] | None = None,
 ) -> Binding:
     """Add an entity to a device, built from some of its commands."""
     device = get_device(data, device_id)
-    check_binding(device, platform, roles)
+    check_binding(device, platform, roles, options)
     binding = Binding(
         platform=platform,
         name=_check_binding_name(device, platform, name, None),
         roles=dict(roles),
+        options=dict(options or {}),
     )
     device.bindings.append(binding)
     return binding
@@ -249,8 +265,9 @@ def update_binding(
     *,
     name: str | None = None,
     roles: dict[str, str] | None = None,
+    options: dict[str, str] | None = None,
 ) -> Binding:
-    """Rename an entity or change its commands (its type is fixed)."""
+    """Rename an entity or change its commands or options (its type is fixed)."""
     device = get_device(data, device_id)
     binding = get_binding(device, binding_id)
     new_name = (
@@ -258,9 +275,11 @@ def update_binding(
         if name is not None
         else binding.name
     )
-    if roles is not None:
-        check_binding(device, binding.platform, roles)
-        binding.roles = dict(roles)
+    if roles is not None or options is not None:
+        new_roles = binding.roles if roles is None else roles
+        new_options = binding.options if options is None else options
+        check_binding(device, binding.platform, new_roles, new_options)
+        binding.roles, binding.options = dict(new_roles), dict(new_options)
     binding.name = new_name
     return binding
 

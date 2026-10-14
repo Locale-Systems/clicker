@@ -28,6 +28,9 @@ set_assumed_state:
     is_on:
       selector:
         boolean:
+    is_closed:
+      selector:
+        boolean:
     percentage:
       selector:
         number:

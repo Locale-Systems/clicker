@@ -171,6 +171,48 @@ async def test_bindings(client: Client, hass: HomeAssistant, hass_storage: dict[
     assert len(stored(hass_storage).devices[0].commands) == 2
 
 
+async def test_binding_options(
+    client: Client, hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """A cover's type is an option: validated, stored, sent back and changeable."""
+    device = (await client.ok("clicker/data"))["devices"][0]
+    power, oscillate = (c["id"] for c in device["commands"])
+    roles = {"open": power, "close": oscillate}
+    checked = await client.ok(
+        "clicker/binding/validate",
+        device_id=device["id"],
+        platform="cover",
+        roles=roles,
+        options={"device_class": "boat"},
+    )
+    assert checked["ok"] is False and "boat" in checked["error"]
+    created = await client.ok(
+        "clicker/binding/create",
+        device_id=device["id"],
+        platform="cover",
+        name="Shade",
+        roles=roles,
+        options={"device_class": "shade"},
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get("cover.patio_fan_shade")
+    assert state is not None and state.attributes["device_class"] == "shade"
+    await client.ok(
+        "clicker/binding/update",
+        device_id=device["id"],
+        binding_id=created["id"],
+        options={"device_class": "awning"},
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get("cover.patio_fan_shade")
+    assert state is not None and state.attributes["device_class"] == "awning"
+    sent_back = (await client.ok("clicker/data"))["devices"][0]["bindings"]
+    assert [b["options"] for b in sent_back if b["platform"] == "cover"] == [
+        {"device_class": "awning"}
+    ]
+    assert stored(hass_storage).devices[0].bindings[-1].options == {"device_class": "awning"}
+
+
 async def test_changes_need_admin(
     hass: HomeAssistant,
     hass_ws_client: WebSocketGenerator,

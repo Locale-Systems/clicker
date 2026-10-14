@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.clicker.panel import FRONTEND_DIR, PANEL_ELEMENT
+from custom_components.clicker.panel import FRONTEND_DIR, PANEL_ELEMENT, _build_hash
 
 from .test_init import setup_clicker
 
@@ -31,7 +31,7 @@ async def test_panel_registered_for_admins(hass: HomeAssistant) -> None:
         assert kwargs["frontend_url_path"] == "clicker"
         assert kwargs["webcomponent_name"] == PANEL_ELEMENT
         assert kwargs["require_admin"] is True
-        assert kwargs["module_url"] == "/clicker_static/clicker-panel.js?v=0.1.0"
+        assert kwargs["module_url"] == f"/clicker_static/clicker-panel.js?v={_build_hash()}"
         (config,) = static.call_args.args[0]
         assert config.url_path == "/clicker_static" and config.path == str(FRONTEND_DIR)
 

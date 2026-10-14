@@ -73,8 +73,8 @@ describe("format", () => {
   it("finds which entities use a command", () => {
     const fan = device("Patio fan", null);
     fan.bindings = [
-      { id: "b1", platform: "fan", name: "Patio fan", roles: { power: "p", speed_1: "s1" }, entity_ids: [] },
-      { id: "b2", platform: "button", name: "Extras", roles: { press: "p" }, entity_ids: [] },
+      { id: "b1", platform: "fan", name: "Patio fan", roles: { power: "p", speed_1: "s1" }, entity_ids: [], options: {} },
+      { id: "b2", platform: "button", name: "Extras", roles: { press: "p" }, entity_ids: [], options: {} },
     ];
     const usage = commandUsage(fan);
     expect(describeUsage(usage.get("p")!)).toBe("Patio fan (fan), Extras (button)");

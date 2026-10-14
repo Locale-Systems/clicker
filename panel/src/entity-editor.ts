@@ -3,14 +3,17 @@
 // and has the final say on save.
 
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import { createBinding, errorMessage, updateBinding, validateBinding } from "./api";
+import { define } from "./define";
 import { shared } from "./styles";
 import {
+  COVER_TYPES,
   TEMPLATES,
   buttonRole,
   detectTemplate,
+  guessCoverType,
   slotsFor,
   speedCount,
   suggestRoles,
@@ -25,10 +28,11 @@ const PLATFORM_NAMES: Record<string, string> = {
   fan: "Fan",
   light: "Light",
   switch: "Switch",
+  cover: "Cover",
   button: "Buttons",
 };
 
-@customElement("clicker-entity-editor")
+@define("clicker-entity-editor")
 export class ClickerEntityEditor extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) device!: ClickerDevice;
@@ -39,6 +43,7 @@ export class ClickerEntityEditor extends LitElement {
   @state() private _name = "";
   @state() private _speeds = 0;
   @state() private _roles: Record<string, string> = {};
+  @state() private _options: Record<string, string> = {};
   @state() private _check?: { ok: boolean; error: string | null };
   @state() private _saving = false;
 
@@ -52,6 +57,7 @@ export class ClickerEntityEditor extends LitElement {
       this._speeds = speeds;
       this._name = this.binding.name;
       this._roles = { ...this.binding.roles };
+      this._options = { ...(this.binding.options ?? {}) };
     } else {
       this._choose(TEMPLATES[0]);
     }
@@ -69,6 +75,10 @@ export class ClickerEntityEditor extends LitElement {
     this._template = template;
     if (!this.binding) this._name = this._defaultName(template);
     this._speeds = template.hasSpeeds ? speedCount(this.device.commands) : 0;
+    if (!this.binding) {
+      const coverType = template.platform === "cover" ? guessCoverType(this.device.name) : "";
+      this._options = coverType ? { device_class: coverType } : {};
+    }
     this._roles = template.pickCommands
       ? {}
       : suggestRoles(slotsFor(template, this._speeds), this.device.commands);
@@ -97,6 +107,11 @@ export class ClickerEntityEditor extends LitElement {
     this._scheduleCheck();
   }
 
+  private _setCoverType(value: string): void {
+    this._options = value ? { device_class: value } : {};
+    this._scheduleCheck();
+  }
+
   private _toggleButton(commandId: string, name: string, on: boolean): void {
     const roles = Object.fromEntries(Object.entries(this._roles).filter(([, id]) => id !== commandId));
     if (on) roles[buttonRole(name, new Set(Object.keys(roles)))] = commandId;
@@ -114,6 +129,7 @@ export class ClickerEntityEditor extends LitElement {
           this.device.id,
           this._template.platform,
           this._roles,
+          this._options,
         );
       } catch (err) {
         this._check = { ok: false, error: errorMessage(err) };
@@ -132,12 +148,14 @@ export class ClickerEntityEditor extends LitElement {
         await updateBinding(this.hass, this.device.id, this.binding.id, {
           name: this._name.trim(),
           roles: this._roles,
+          options: this._options,
         });
       } else {
         await createBinding(this.hass, this.device.id, {
           platform: this._template.platform,
           name: this._name.trim(),
           roles: this._roles,
+          options: this._options,
         });
       }
       this.dispatchEvent(
@@ -182,6 +200,7 @@ export class ClickerEntityEditor extends LitElement {
               : `Shown as ${this.device.name} ${this._name.trim()}`}
           </span></label
         >
+        ${this._template.platform === "cover" ? this._renderCoverType() : nothing}
         ${this._template.hasSpeeds
           ? html`<label
               >Speeds
@@ -214,6 +233,20 @@ export class ClickerEntityEditor extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _renderCoverType() {
+    const current = this._options.device_class ?? "";
+    return html`<label
+      >Kind of cover
+      <select @change=${(e: Event) => this._setCoverType((e.target as HTMLSelectElement).value)}>
+        <option value="" ?selected=${!current}>Generic cover</option>
+        ${COVER_TYPES.map(
+          (t) => html`<option value=${t.value} ?selected=${t.value === current}>${t.label}</option>`,
+        )}
+      </select>
+      <span class="hint">Sets the icon, and how voice assistants talk about it</span></label
+    >`;
   }
 
   private _renderSlots() {

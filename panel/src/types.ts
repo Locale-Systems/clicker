@@ -43,6 +43,7 @@ export interface ClickerBinding {
   platform: string;
   name: string;
   roles: Record<string, string>;
+  options: Record<string, string>;
   entity_ids: string[];
 }
 
