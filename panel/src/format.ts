@@ -175,3 +175,21 @@ export function radioHints(radio: ClickerRadio, devices: number): string[] {
   if (!devices && radio.online && radio.can_send) hints.push("Ready for a device.");
   return hints;
 }
+
+export const PLATFORM_ICONS: Record<string, string> = {
+  fan: "mdi:fan",
+  light: "mdi:lightbulb",
+  switch: "mdi:toggle-switch-variant",
+  button: "mdi:gesture-tap-button",
+};
+
+/** "Imported 2 devices · skipped 1 already in Clicker" from the import's notes. */
+export function importSummary(notes: string[]): string {
+  const imported = notes.filter((n) => /: imported with \d+ commands?$/.test(n)).length;
+  const skipped = notes.filter((n) => /: skipped, a device with that name exists$/.test(n)).length;
+  if (!imported && !skipped) return "Nothing to import";
+  const parts = [];
+  if (imported) parts.push(`Imported ${count(imported, "device")}`);
+  if (skipped) parts.push(`${imported ? "skipped" : "Skipped"} ${skipped} already in Clicker`);
+  return parts.join(" · ");
+}

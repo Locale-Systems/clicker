@@ -66,7 +66,11 @@ Python 3.14 or later, matching Home Assistant's own minimum. The core uses only 
 
 ### The panel
 
-Clicker adds a **Clicker** entry to the sidebar for admins: your devices by area, with their radio, commands and entities, kept live as things change.
+Clicker adds a **Clicker** entry to the sidebar for admins, with three tabs:
+
+- **Devices**: your devices by area. Add a device (it opens straight into learning) or import from RF Device Manager. A device's page lists its commands (test, rename, change kind or frames on air, delete), learns new ones from the remote (live candidates you can test, then save or use to relearn an existing command), and builds entities from templates: fans with a power toggle or an Off button, lights and switches with a toggle or On and Off buttons, and buttons.
+- **Live signals**: everything the radios hear, with what it decoded to and which command it matched, and each radio's counts over the last 10 minutes.
+- **Radios**: each radio's state, what it can do, and advice; rename, or delete one no device uses.
 
 ### Fans
 

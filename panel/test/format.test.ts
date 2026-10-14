@@ -8,6 +8,7 @@ import {
   entitySummary,
   groupByArea,
   heardTitle,
+  importSummary,
   mhz,
   radioHints,
   radioLabel,
@@ -136,5 +137,13 @@ describe("format", () => {
     const offline = radioHints({ ...radio, online: false, can_receive: false }, 1);
     expect(offline[0]).toMatch(/^Offline/);
     expect(offline[1]).toMatch(/^Can't hear remotes/);
+  });
+
+  it("summarizes an import", () => {
+    expect(importSummary(["Patio Fan: imported with 6 commands", "Den: skipped, a device with that name exists"]))
+      .toBe("Imported 1 device · skipped 1 already in Clicker");
+    expect(importSummary(["Patio Fan / Power: toggle, encoded", "Patio Fan: skipped, a device with that name exists"]))
+      .toBe("Skipped 1 already in Clicker");
+    expect(importSummary([])).toBe("Nothing to import");
   });
 });

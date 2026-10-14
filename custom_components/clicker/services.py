@@ -68,6 +68,11 @@ def _by_name_or_id[T: (Device, Command)](items: list[T], wanted: str, what: str)
     return named[0]
 
 
+def rf_device_manager_path(hass: HomeAssistant) -> Path:
+    """Where rf_device_manager keeps its data."""
+    return Path(hass.config.path(".storage", *RF_DEVICE_MANAGER_STORAGE))
+
+
 async def async_import_rf_device_manager(
     hass: HomeAssistant, entry: ClickerConfigEntry
 ) -> dict[str, Any]:
@@ -76,7 +81,7 @@ async def async_import_rf_device_manager(
     Devices whose names Clicker already has are skipped, so this can be run
     again safely. Returns the notes and any problems left in the data.
     """
-    path = Path(hass.config.path(".storage", *RF_DEVICE_MANAGER_STORAGE))
+    path = rf_device_manager_path(hass)
     raw: Any = await hass.async_add_executor_job(load_json, path, None)
     if raw is None:
         raise ServiceValidationError(f"No rf_device_manager data found at {path}")

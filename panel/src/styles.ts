@@ -26,6 +26,7 @@ export const shared = css`
     font-size: 13px;
   }
   button {
+    white-space: nowrap;
     font: inherit;
     font-size: 14px;
     color: var(--primary-color);

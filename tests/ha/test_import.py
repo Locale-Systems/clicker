@@ -106,3 +106,23 @@ async def test_import_without_file(
     await setup_clicker(hass)
     with pytest.raises(ServiceValidationError, match="No rf_device_manager data"):
         await run_import(hass)
+
+
+async def test_import_over_websocket(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    config_dir: pathlib.Path,
+    found_radios: list[FoundRadio],
+) -> None:
+    """The panel checks for rf_device_manager data, then imports it."""
+    await setup_clicker(hass)
+    ws = await hass_ws_client(hass)
+    await ws.send_json_auto_id({"type": "clicker/import/status"})
+    assert (await ws.receive_json())["result"] == {"available": False}
+
+    write_rfdm(config_dir, rf_device_manager_store())
+    await ws.send_json_auto_id({"type": "clicker/import/status"})
+    assert (await ws.receive_json())["result"] == {"available": True}
+    await ws.send_json_auto_id({"type": "clicker/import/run"})
+    result = (await ws.receive_json())["result"]
+    assert "Patio fan: imported with 2 commands" in result["notes"] and result["problems"] == []

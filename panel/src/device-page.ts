@@ -8,6 +8,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import {
   deleteBinding,
   deleteCommand,
+  deleteDevice,
   errorMessage,
   sendCommand,
   updateCommand,
@@ -17,8 +18,10 @@ import "./entity-editor";
 import "./learn-drawer";
 import {
   KIND_HINTS,
+  PLATFORM_ICONS,
   KIND_LABELS,
   commandUsage,
+  count,
   describeUsage,
   entitySummary,
   radioLabel,
@@ -29,12 +32,6 @@ import { shared } from "./styles";
 import { detectTemplate } from "./templates";
 import type { ClickerBinding, ClickerCommand, ClickerDevice, ClickerRadio, Hass } from "./types";
 
-const PLATFORM_ICONS: Record<string, string> = {
-  fan: "mdi:fan",
-  light: "mdi:lightbulb",
-  switch: "mdi:toggle-switch-variant",
-  button: "mdi:gesture-tap-button",
-};
 
 interface CommandDraft {
   id: string;
@@ -53,9 +50,28 @@ export class ClickerDevicePage extends LitElement {
   @state() private _confirmDelete?: string; // command id
   @state() private _sending = new Set<string>();
   @state() private _settings?: { name: string; area: string; radio: string };
+  /** Start with the learn drawer open (a new device goes straight to learning). */
+  @property({ type: Boolean }) learn = false;
   @state() private _learning = false;
   @state() private _editingBinding?: string; // binding id, or "new"
   @state() private _confirmRemove?: string; // binding id
+  @state() private _confirmDeleteDevice = false;
+
+  @state() private _narrow = false;
+  private _media = window.matchMedia("(max-width: 800px)");
+  private _onMedia = () => (this._narrow = this._media.matches);
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    if (this.learn) this._learning = true;
+    this._narrow = this._media.matches;
+    this._media.addEventListener("change", this._onMedia);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._media.removeEventListener("change", this._onMedia);
+  }
 
   private _toast(message: string): void {
     this.dispatchEvent(
@@ -150,6 +166,11 @@ export class ClickerDevicePage extends LitElement {
               >`
             : nothing}
           <span class="spacer"></span>
+          ${this._settingsChanged() || this._confirmDeleteDevice
+            ? nothing
+            : html`<button class="danger" @click=${() => (this._confirmDeleteDevice = true)}>
+                Delete device
+              </button>`}
           ${this._settingsChanged()
             ? html`<button @click=${() => (this._settings = undefined)}>Cancel</button>
                 <button class="primary" ?disabled=${!s.name.trim()} @click=${this._saveSettings}>
@@ -157,8 +178,29 @@ export class ClickerDevicePage extends LitElement {
                 </button>`
             : nothing}
         </div>
+        ${this._confirmDeleteDevice
+          ? html`<div class="confirm">
+              Delete ${this.device.name}?
+              ${this.device.commands.length
+                ? `Its ${count(this.device.commands.length, "learned command")} and its entities go with it.`
+                : ""}
+              <div class="actions">
+                <span class="spacer"></span>
+                <button @click=${() => (this._confirmDeleteDevice = false)}>Cancel</button>
+                <button class="danger" @click=${this._deleteDevice}>Delete</button>
+              </div>
+            </div>`
+          : nothing}
       </div>
     `;
+  }
+
+  private async _deleteDevice(): Promise<void> {
+    const name = this.device.name;
+    if (await this._call(() => deleteDevice(this.hass, this.device.id), `Deleted ${name}`)) {
+      history.pushState(null, "", "/clicker");
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+    }
   }
 
   // --- Commands --------------------------------------------------------------
@@ -207,7 +249,11 @@ export class ClickerDevicePage extends LitElement {
         </div>
         ${this.device.commands.length
           ? this.device.commands.map((c) => this._renderCommand(c, usage.get(c.id) ?? []))
-          : html`<div class="meta">No commands yet. Press Learn, then press buttons on the remote.</div>`}
+          : html`<div class="meta">
+              ${this._learning
+                ? "No commands yet. Press the remote's buttons; save each one from the Learn panel."
+                : "No commands yet. Press Learn, then press buttons on the remote."}
+            </div>`}
       </div>
     `;
   }
@@ -418,18 +464,19 @@ export class ClickerDevicePage extends LitElement {
   }
 
   render() {
+    const drawer = this._learning
+      ? html`<clicker-learn-drawer
+          .hass=${this.hass}
+          .device=${this.device}
+          @close=${() => (this._learning = false)}
+        ></clicker-learn-drawer>`
+      : nothing;
+    // On a phone the columns stack, so learning goes on top, beside your presses.
     return html`
       <div class="layout">
-        <div class="column">${this._renderCommands()}</div>
+        <div class="column">${this._narrow ? drawer : nothing} ${this._renderCommands()}</div>
         <div class="column">
-          ${this._learning
-            ? html`<clicker-learn-drawer
-                .hass=${this.hass}
-                .device=${this.device}
-                @close=${() => (this._learning = false)}
-              ></clicker-learn-drawer>`
-            : nothing}
-          ${this._renderSettings()} ${this._renderEntities()}
+          ${this._narrow ? nothing : drawer} ${this._renderSettings()} ${this._renderEntities()}
         </div>
       </div>
     `;

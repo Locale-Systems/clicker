@@ -97,10 +97,16 @@ export class ClickerSignalsPage extends LitElement {
         <span class="time">${time}</span>
         <div class="main">
           <div class="code">${heardTitle(heard)}</div>
-          <div class="meta">
-            ${radio ? radioLabel(radio.name, radio.frequency_hz) : "Unknown radio"}
-            ${heard.bits ? html` · ${heard.encoding}` : nothing}
-          </div>
+          ${this.radios.length > 1 || heard.bits
+            ? html`<div class="meta">
+                ${this.radios.length > 1
+                  ? radio
+                    ? radioLabel(radio.name, radio.frequency_hz)
+                    : "Unknown radio"
+                  : nothing}
+                ${this.radios.length > 1 && heard.bits ? " · " : nothing}${heard.bits ? heard.encoding : nothing}
+              </div>`
+            : nothing}
         </div>
         ${heard.matches.length
           ? html`<span class="chip match">${heard.matches.join(", ")}</span>`
@@ -176,7 +182,7 @@ export class ClickerSignalsPage extends LitElement {
         font-size: 13px;
         color: var(--secondary-text-color);
         font-variant-numeric: tabular-nums;
-        min-width: 76px;
+        min-width: 64px;
       }
       .main {
         flex: 1;

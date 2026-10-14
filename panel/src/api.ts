@@ -125,3 +125,19 @@ export const renameRadio = (hass: Hass, radioId: string, name: string) =>
 
 export const deleteRadio = (hass: Hass, radioId: string) =>
   hass.connection.sendMessagePromise<null>({ type: "clicker/radio/delete", radio_id: radioId });
+
+export const createDevice = (
+  hass: Hass,
+  device: { name: string; radio_id: string; area_id?: string | null },
+) => hass.connection.sendMessagePromise<ClickerDevice>({ type: "clicker/device/create", ...device });
+
+export const importStatus = (hass: Hass) =>
+  hass.connection.sendMessagePromise<{ available: boolean }>({ type: "clicker/import/status" });
+
+export const importRun = (hass: Hass) =>
+  hass.connection.sendMessagePromise<{ notes: string[]; problems: string[] }>({
+    type: "clicker/import/run",
+  });
+
+export const deleteDevice = (hass: Hass, deviceId: string) =>
+  hass.connection.sendMessagePromise<null>({ type: "clicker/device/delete", device_id: deviceId });

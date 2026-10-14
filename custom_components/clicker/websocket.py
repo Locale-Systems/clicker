@@ -12,7 +12,8 @@ Reading (any user):
 Changing (admin): ``clicker/device/{create,update,delete}``,
 ``clicker/command/{update,delete}``, ``clicker/radio/{update,delete}`` and
 ``clicker/binding/{validate,create,update,delete}`` (entities), with the
-rules in :mod:`core.edit`.
+rules in :mod:`core.edit`; ``clicker/import/{status,run}`` imports
+rf_device_manager's data.
 
 Learning (admin): ``clicker/learn/subscribe`` opens a learn session for a
 device and sends its ranked candidates every time a capture changes them;
@@ -56,6 +57,7 @@ from .core.receive import Reception
 from .hub import STATS_WINDOW_S, Heard
 from .runtime import ClickerConfigEntry, ClickerRuntime
 from .sender import describe
+from .services import async_import_rf_device_manager, rf_device_manager_path
 
 type Connection = websocket_api.ActiveConnection
 type Message = dict[str, Any]
@@ -493,6 +495,27 @@ async def ws_binding_delete(hass: HomeAssistant, connection: Connection, msg: Me
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({vol.Required("type"): "clicker/import/status"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_import_status(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Say whether rf_device_manager data exists to import."""
+    path = rf_device_manager_path(hass)
+    available = await hass.async_add_executor_job(path.is_file)
+    connection.send_result(msg["id"], {"available": available})
+
+
+@websocket_api.websocket_command({vol.Required("type"): "clicker/import/run"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_import_run(hass: HomeAssistant, connection: Connection, msg: Message) -> None:
+    """Import rf_device_manager's devices (skipping names Clicker has); return the notes."""
+    entries: list[ClickerConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        raise HomeAssistantError("Clicker is not loaded")
+    connection.send_result(msg["id"], await async_import_rf_device_manager(hass, entries[0]))
+
+
 # --- Learning -------------------------------------------------------------------
 
 
@@ -696,6 +719,8 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
         ws_binding_create,
         ws_binding_update,
         ws_binding_delete,
+        ws_import_status,
+        ws_import_run,
         ws_learn_subscribe,
         ws_learn_test,
         ws_learn_save,
