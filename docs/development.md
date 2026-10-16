@@ -59,5 +59,6 @@ python -m script.hassfest --integration-path /path/to/clicker/custom_components/
 
 ## Releasing
 
-1. Update `version` in `custom_components/clicker/manifest.json`.
-2. Commit, tag `v<version>`, push, and publish a GitHub release for the tag. HACS offers releases as updates.
+1. Update `version` in `custom_components/clicker/manifest.json` and commit.
+2. Tag it with an annotated tag `v<version>`: the first line is the release title and the rest the release notes, in Markdown (`git tag -a --cleanup=verbatim -F notes.md v<version>`, since the default cleanup drops `#` headings).
+3. Push `main` and the tag. The Release workflow publishes the GitHub release, which HACS offers as an update.
