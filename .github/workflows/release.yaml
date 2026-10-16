@@ -1,76 +1,79 @@
 name: Release
 
-# Publishes the GitHub release for a release tag (what HACS installs) as the
-# locale-ci-publish GitHub App, not a personal account.
-#
-# A release is an annotated tag `v<version>` matching the manifest's version:
-# its subject is the release title and its body the release notes (Markdown).
-# Run the workflow by hand with a tag to release one that already exists.
+# To release, either:
+#   - GitHub → Releases → "Draft a new release" → create a new tag such as v0.3.0 → Publish, or
+#   - push a tag:  git tag v0.3.0 && git push origin v0.3.0  (the release gets generated notes)
+# The tag sets the version, so manifest.json (which keeps a placeholder) is not
+# bumped first. This runs the tests, builds the panel, and attaches clicker.zip,
+# what HACS installs, to the release.
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing tag to release (for example v0.2.0)
-        required: true
+
+permissions:
+  contents: write
 
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: release-${{ github.ref_name }}
 
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yaml
+
   release:
-    if: github.repository == 'Locale-Systems/clicker'
+    needs: tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version: "22"
 
-      - name: Check the tag
-        id: tag
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+      - name: Set the version from the tag
+        id: version
         run: |
-          # actions/checkout can leave the triggering tag lightweight; fetch
-          # the tag object itself, which carries the release notes.
-          git fetch --force --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}"
-          if [ "$(git cat-file -t "$TAG")" != tag ]; then
-            echo "::error::$TAG is not an annotated tag" >&2
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} is not a version tag like v1.2.3 or v1.2.3-beta.1"
             exit 1
           fi
-          version="$(git show "${TAG}:custom_components/clicker/manifest.json" \
-            | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"
-          if [ "v${version}" != "$TAG" ]; then
-            echo "::error::$TAG does not match the manifest's version ${version}" >&2
-            exit 1
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          python3 - "${version}" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path("custom_components/clicker/manifest.json")
+          manifest = json.loads(path.read_text())
+          manifest["version"] = sys.argv[1]
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
-      - name: Mint a token
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.LOCALE_CI_PUBLISH_CLIENT_ID }}
-          private-key: ${{ secrets.LOCALE_CI_PUBLISH_APP_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: clicker
+      - name: Build the panel
+        working-directory: panel
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build clicker.zip
+        run: |
+          (cd custom_components/clicker && zip -q -r -X ../../clicker.zip . -x '*__pycache__*' '*.pyc')
+          # HACS unpacks the zip into custom_components/clicker: the files sit at its root.
+          unzip -Z1 clicker.zip > "${RUNNER_TEMP}/contents"
+          grep -qx manifest.json "${RUNNER_TEMP}/contents"
+          grep -qx frontend/clicker-panel.js "${RUNNER_TEMP}/contents"
+          unzip -p clicker.zip manifest.json > "${RUNNER_TEMP}/manifest.json"
+          grep -q "\"version\": \"${{ steps.version.outputs.version }}\"" "${RUNNER_TEMP}/manifest.json"
 
       - name: Publish the release
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "$TAG is already released"
-            exit 0
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            # Published from the Releases page; attach the build to it.
+            gh release upload "${GITHUB_REF_NAME}" clicker.zip --clobber
+          else
+            prerelease=()
+            case "${GITHUB_REF_NAME}" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "${GITHUB_REF_NAME}" clicker.zip --verify-tag \
+              --title "Clicker ${VERSION}" --generate-notes "${prerelease[@]}"
           fi
-          git tag -l --format='%(contents:body)' "$TAG" \
-            | sed '/^-----BEGIN \(PGP\|SSH\) SIGNATURE-----/,$d' > notes.md
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "$(git tag -l --format='%(contents:subject)' "$TAG")" \
-            --notes-file notes.md

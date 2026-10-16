@@ -27,7 +27,7 @@ Control sub-GHz RF remote devices (ceiling fans, lights, awnings, shades, outlet
 
 ### By hand
 
-Copy `custom_components/clicker` into your Home Assistant configuration's `custom_components` folder and restart Home Assistant.
+Download `clicker.zip` from the [latest release](https://github.com/Locale-Systems/clicker/releases/latest), unzip it into a `custom_components/clicker` folder in your Home Assistant configuration, and restart Home Assistant.
 
 ## Setup
 

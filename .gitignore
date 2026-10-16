@@ -10,3 +10,5 @@ rf_device_manager
 .mypy_cache/
 .ruff_cache/
 .venv-ha/
+# The panel build: `npm run build` in panel/; releases build it into clicker.zip
+custom_components/clicker/frontend/

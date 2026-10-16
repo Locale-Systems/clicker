@@ -2,7 +2,9 @@ name: Tests
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
 
 jobs:
   core:
@@ -56,5 +58,3 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # The build is committed (HACS installs need no build step): it must be current.
-      - run: git diff --exit-code ../custom_components/clicker/frontend

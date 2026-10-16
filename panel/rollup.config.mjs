@@ -4,7 +4,8 @@ import terser from "@rollup/plugin-terser";
 
 const dev = process.env.ROLLUP_WATCH === "true";
 
-// The build is committed: Home Assistant serves it from the integration.
+// Home Assistant serves the build from the integration. It isn't committed:
+// releases build it into clicker.zip.
 export default {
   input: "src/clicker-panel.ts",
   output: {
