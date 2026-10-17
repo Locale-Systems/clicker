@@ -1,0 +1,11 @@
+# Keeps the SHA-pinned actions in .github/workflows current. Pins that track a
+# branch (marked "main" or "master" with a date) are not bumped; refresh those by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
