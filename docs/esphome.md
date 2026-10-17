@@ -94,13 +94,102 @@ radio_frequency:
     remote_receiver_id: rf_rx
 ```
 
+## Example: a second radio on the same node (303.87 MHz)
+
+A node can carry one CC1101 per frequency. The modules share the SPI bus (SCK, MOSI, MISO), and each has its own CSN, GDO0 and GDO2 pins. This adds a 303.87 MHz CC1101 to the wESP32 above. The second CSN takes GPIO5, so the first CC1101's GDO2 moves from GPIO5 to GPIO36:
+
+| | ESP32 |
+| --- | --- |
+| SCK, MOSI, MISO (both CC1101s) | Shared: GPIO14, GPIO13, GPIO12 |
+| First CC1101's GDO2 (receive) | GPIO36, moved from GPIO5 |
+| Second CC1101's CSN | GPIO5 |
+| Second CC1101's GDO0 (transmit) | GPIO33 |
+| Second CC1101's GDO2 (receive) | GPIO35 |
+
+Input-only pins (GPIO34 to GPIO39) are fine for receive. ESPHome logs `gpio_pullup_en ... input-only pad has no internal PU` for them at boot, which is harmless: GDO2 drives the line.
+
+Replace the `cc1101`, `remote_transmitter`, `remote_receiver` and `radio_frequency` sections with:
+
+```yaml
+cc1101:
+  - id: cc1101_433
+    cs_pin: GPIO15
+    frequency: 433.92MHz
+    magn_target: 33dB
+    filter_length_ask_ook: 12dB
+  - id: cc1101_303
+    cs_pin: GPIO5
+    frequency: 303.87MHz
+    magn_target: 33dB
+    filter_length_ask_ook: 12dB
+
+remote_transmitter:
+  - id: rf_tx_433
+    pin: GPIO4 # GDO0 of the 433.92 MHz CC1101
+    carrier_duty_percent: 100%
+    on_transmit:
+      then:
+        - cc1101.begin_tx: cc1101_433
+    on_complete:
+      then:
+        - cc1101.begin_rx: cc1101_433
+  - id: rf_tx_303
+    pin: GPIO33 # GDO0 of the 303.87 MHz CC1101
+    carrier_duty_percent: 100%
+    on_transmit:
+      then:
+        - cc1101.begin_tx: cc1101_303
+    on_complete:
+      then:
+        - cc1101.begin_rx: cc1101_303
+
+remote_receiver:
+  - id: rf_rx_433
+    pin: GPIO36 # GDO2 of the 433.92 MHz CC1101
+    filter: 200us
+    idle: 15ms
+    filter_symbols: 20
+    buffer_size: 16kb
+  - id: rf_rx_303
+    pin: GPIO35 # GDO2 of the 303.87 MHz CC1101
+    filter: 200us
+    idle: 15ms
+    filter_symbols: 20
+    buffer_size: 16kb
+
+radio_frequency:
+  - platform: ir_rf_proxy
+    name: RF Transmitter 433
+    frequency: 433.92MHz
+    remote_transmitter_id: rf_tx_433
+  - platform: ir_rf_proxy
+    name: RF Receiver 433
+    frequency: 433.92MHz
+    remote_receiver_id: rf_rx_433
+  - platform: ir_rf_proxy
+    name: RF Transmitter 303
+    frequency: 303.87MHz
+    remote_transmitter_id: rf_tx_303
+  - platform: ir_rf_proxy
+    name: RF Receiver 303
+    frequency: 303.87MHz
+    remote_receiver_id: rf_rx_303
+```
+
+Clicker shows these as two radios, one per frequency.
+
+- **Name the CC1101 in every `cc1101.begin_tx` and `cc1101.begin_rx`.** With more than one, ESPHome can't pick one for you.
+- **Use a module made for the band.** CC1101 modules are tuned for one band by their matching components and antenna: for 303.87 MHz use one sold for 315 MHz. A 433 MHz module set to 303.87 MHz receives poorly.
+- **Keep the antennas a few centimetres apart.** A transmission on one radio can briefly deafen a receiver right next to it.
+- **Mind the ESP32's RMT memory.** On a classic ESP32, two radios at the default `rmt_symbols` (192 per receiver, 64 per transmitter) use all 512 symbols. More radios need smaller `rmt_symbols`. An ESP32-S3 has only 192 receive symbols in all, so with more than one receiver set `rmt_symbols: 48` on each.
+
 ## Things that matter
 
 - **Don't set `gdo0_pin` on the `cc1101`** when GDO0 is also the `remote_transmitter` pin. It takes the pin away from the transmitter, and sending silently stops working.
 - **Switch the CC1101 between transmit and receive** with `cc1101.begin_tx` and `cc1101.begin_rx` around each transmission, as above. The CC1101 is half duplex, so the node doesn't hear its own transmissions.
 - **Keep the receiver from drowning in noise.** With the defaults, a CC1101 hears so much background noise that the receiver reports "Buffer overflow" and real presses get lost. The `magn_target`, `filter_length_ask_ook`, `filter_symbols` and `buffer_size` settings above fixed that. If Live signals still shows a constant stream of short undecoded bursts, try `filter_length_ask_ook: 16dB`.
 - **Leave `dump` off, or limit it to `rc_switch`.** `dump: raw` with the ESPHome logs open makes the receiver stall for about 150–200 ms per press. Clicker gets the timings over the API either way.
-- **One frequency per CC1101.** For a second band (for example 303.87 MHz fans), add a second CC1101 module, on the same node with its own CS, GDO0 and GDO2 pins, or on another node, with its own `remote_transmitter`, `remote_receiver` and `ir_rf_proxy` pair at that frequency. Clicker keeps each band's devices on its own radio.
+- **One frequency per CC1101.** For a second band, add a second CC1101 module, on the same node (see above) or on another node, with its own `remote_transmitter`, `remote_receiver` and `ir_rf_proxy` pair at that frequency. Clicker keeps each band's devices on its own radio.
 - **If a receiver that used to work hears only garbage**, reboot the node. A CC1101 can occasionally end up in a bad state that a restart clears.
 
 ## Checking it works
