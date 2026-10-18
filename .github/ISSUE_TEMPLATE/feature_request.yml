@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest something Clicker should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The problem or use case, not just the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like Clicker to do
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've tried
+  - type: input
+    id: device
+    attributes:
+      label: Device and remote
+      description: If the request is about a particular device, its make, model and remote frequency.
