@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in Clicker doesn't work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please check the [Troubleshooting](https://github.com/Locale-Systems/clicker#troubleshooting) section and the existing issues first.
+        Security problems go through **Security → Report a vulnerability**, never a public issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the device page for ...
+        2. Press ... on the remote
+        3. ...
+  - type: input
+    id: clicker-version
+    attributes:
+      label: Clicker version
+      description: Shown in HACS, or in Settings → Devices & services → Clicker.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.10.1"
+    validations:
+      required: true
+  - type: input
+    id: radio
+    attributes:
+      label: Radio
+      description: Transceiver, frequency and ESPHome version of the radio node.
+      placeholder: CC1101 at 433.92 MHz, ESPHome 2026.10.0
+  - type: input
+    id: device
+    attributes:
+      label: Device and remote
+      description: Make and model of the device and its remote, if known.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Settings → Devices & services → Clicker → ⋮ → **Download diagnostics**, then drag the file here.
+        It includes the last 25 receptions.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Turn on debug logging for `custom_components.clicker`, reproduce the problem, and paste the relevant lines.
+      render: text
